@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .camping import CampingIndex
 from .elevation import Elevation
 from .graph import Graph
 from .paths import STATIC
@@ -24,6 +25,7 @@ class RouteRequest(BaseModel):
     points: list[tuple[float, float]]
     profile: str = "car"
     legs: list[list[float] | str] = []
+    vehicles: list[str] = []  # per leg; defaults to `profile`
 
 
 class ElevationRequest(BaseModel):
@@ -35,6 +37,7 @@ def create_app(regions):
     router = Router(g)
     elevation = Elevation()
     road_tiles = RoadTiles(g, router.weights.kind)
+    camping = CampingIndex()
     tile_version = str(int(time.time()))  # busts browser caches when the server (or tile style) changes
     app = FastAPI(title="GravelMaps")
     http = requests.Session()
@@ -47,17 +50,42 @@ def create_app(regions):
             "bbox": g.bbox,
             "profiles": {k: {"label": v["label"], "kinds": v["kinds"]} for k, v in PROFILES.items()},
             "kinds": [{"key": k, "label": label} for k, label in zip(KINDS, KIND_LABELS)],
+            # The extra slider after the road kinds; hidden in the UI when terrain wasn't downloaded.
+            "elevation": {"label": "High Elevation", "ready": getattr(g, "edge_high", None) is not None},
             "presets": PRESETS,
             "default_preset": DEFAULT_PRESET,
             "tile_version": tile_version,
+            "camping": {"ready": camping.ready, "built": camping.built},
         }
 
     @app.post("/api/route")
     def route(req: RouteRequest):
         try:
-            return router.route(req.points, req.profile, req.legs)
+            res = router.route(req.points, req.profile, req.legs, req.vehicles)
         except RouteError as e:
             raise HTTPException(422, str(e))
+        res["fuel"] = g.fuel.along([c for f in res["features"] for c in f["geometry"]["coordinates"]])
+        return res
+
+    @app.get("/api/fuel")
+    def fuel(s: float, w: float, n: float, e: float, z: int | None = None):
+        """Gas stations in a map view (south, west, north, east)."""
+        return g.fuel.in_bbox(s, w, n, e, zoom=z)
+
+    @app.get("/api/pois")
+    def poi_list(s: float, w: float, n: float, e: float, kinds: str, z: int | None = None):
+        """Points of interest in a map view, for a comma-separated list of kinds, thinned for zoom z."""
+        return g.pois.in_bbox(s, w, n, e, [k for k in kinds.split(",") if k], zoom=z)
+
+    @app.get("/api/camping")
+    def camping_list(s: float, w: float, n: float, e: float):
+        """Roads with dispersed camping rules, no-camping areas and listed camping areas in a map view."""
+        return camping.in_bbox(s, w, n, e)
+
+    @app.get("/api/camping/at")
+    def camping_at(lat: float, lon: float):
+        """The camping rules of the motor vehicle use maps covering a point."""
+        return camping.at(lat, lon)
 
     @app.get("/api/roads/{layer}/{z}/{x}/{y}.png")
     def roads_tile(layer: str, z: int, x: int, y: int, theme: str = "dark"):
@@ -132,6 +160,14 @@ def create_app(regions):
             name, _, detail = x["display_name"].partition(", ")
             out.append({"name": name, "detail": detail, "lat": float(x["lat"]), "lon": float(x["lon"])})
         return out
+
+    @app.middleware("http")
+    async def revalidate_ui(request, call_next):
+        # Make browsers check for a newer app.js/style.css on every load instead of reusing a stale copy.
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
     return app

@@ -14,15 +14,15 @@ import time
 
 import numpy as np
 
-from . import places
+from . import places, pois
 from .paths import graph_dir, ways_path
 
-GRAPH_VERSION = 3
+GRAPH_VERSION = 6
 GRID_DEG = 0.01
 FIXED = 1e-7
 EARTH_R = 6371008.8
 
-WAY_ARRAYS = ["road_class", "surface", "rough", "legal", "oneway", "name_idx"]
+WAY_ARRAYS = ["road_class", "surface", "rough", "legal", "oneway", "detail", "name_idx"]
 
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -60,7 +60,7 @@ def _merge_ways(regions):
         with np.load(ways_path(r)) as z:
             parts["way_ids"].append(z["way_ids"])
             parts["lengths"].append(np.diff(z["offsets"]))
-            for k in ["node_ids", "lat", "lon", "road_class", "surface", "rough", "legal", "oneway",
+            for k in ["node_ids", "lat", "lon", "road_class", "surface", "rough", "legal", "oneway", "detail",
                       "barrier_ids", "barrier_block"]:
                 parts[k].append(z[k])
             ni = z["name_idx"].astype(np.int32)
@@ -198,10 +198,12 @@ def build(regions):
     with open(os.path.join(tmp, "names.json"), "w") as f:
         json.dump(names, f)
     n_places = places.build([(r, ways_path(r)) for r in regions], os.path.join(tmp, "places.json"))
+    n_fuel = pois.build_fuel([ways_path(r) for r in regions], os.path.join(tmp, "fuel.json"))
+    n_pois = pois.build_pois([ways_path(r) for r in regions], os.path.join(tmp, "pois.json"))
     shutil.rmtree(out, ignore_errors=True)
     os.replace(tmp, out)
     print(f"  graph: {n_nodes:,} nodes, {n_edges:,} edges from {nways:,} ways, "
-          f"{n_places:,} places in {time.time() - t0:.0f}s")
+          f"{n_places:,} places, {n_fuel:,} gas stations, {n_pois:,} points of interest in {time.time() - t0:.0f}s")
     return out
 
 
@@ -225,3 +227,5 @@ class Graph:
         self.bbox = self.meta["bbox"]
         self.regions = self.meta["regions"]
         self.places = places.PlaceIndex(os.path.join(d, "places.json"))
+        self.fuel = pois.FuelIndex(os.path.join(d, "fuel.json"))
+        self.pois = pois.PoiIndex(os.path.join(d, "pois.json"))

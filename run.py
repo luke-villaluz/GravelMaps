@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """One-command launcher: sets up a virtualenv, installs deps, builds map data, starts the server.
 
-Usage:  python3 run.py [--regions nevada,utah] [--rebuild] [--update-data] [--port 8000]
+Usage:  python3 run.py              # interactive menu
+        python3 run.py [--regions nevada,utah] [--rebuild] [--update-data] [--port 8000]
+
+Symlink it onto your PATH to get a `GravelMaps` command that works from any directory:
+        ln -s "$PWD/run.py" ~/.local/bin/GravelMaps
 """
 import hashlib
 import os
+import signal
 import subprocess
 import sys
 import venv
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.realpath(__file__))  # realpath: works when run via a symlink
 VENV = os.path.join(ROOT, ".venv")
 REQS = os.path.join(ROOT, "requirements.txt")
 STAMP = os.path.join(VENV, ".requirements.sha256")
@@ -40,11 +45,10 @@ def main():
         with open(STAMP, "w") as f:
             f.write(want)
 
-    try:
-        code = subprocess.call([py, "-m", "gravelmaps", "run", *sys.argv[1:]], cwd=ROOT)
-    except KeyboardInterrupt:
-        code = 0
-    sys.exit(code)
+    child = subprocess.Popen([py, "-m", "gravelmaps", *sys.argv[1:]], cwd=ROOT)
+    # Ctrl+C (still works besides typing q) reaches the child too; let it shut the server down cleanly.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    sys.exit(child.wait())
 
 
 if __name__ == "__main__":

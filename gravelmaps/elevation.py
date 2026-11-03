@@ -118,3 +118,71 @@ class Elevation:
             "min_m": round(float(e.min()), 1),
             "max_grade": round(float(grade.max()), 4),
         }
+
+
+# ---- how "high up" each road is, for the High Elevation slider ----------------------------------
+HIGH_ZOOM = 9            # terrain tiles used (~250 m pixels; about 700 tiles / 100 MB for six states)
+RELIEF_RADIUS_M = 12_000  # "the valley floor" = lowest ground within this distance
+RELIEF_FULL_M = 1000      # this far above the valley floor counts as fully high
+ABS_LOW_M, ABS_HIGH_M = 1800, 3600  # or, absolute elevation from ~5,900 ft (0) to ~11,800 ft (1)
+
+
+def heights_path(regions):
+    from .paths import graph_dir
+    return os.path.join(graph_dir(regions), "edge_high.npy")
+
+
+def build_edge_heights(regions):
+    """Score every edge 0-255 for how high up it is: the larger of its height above the nearby
+    valley floor and its absolute elevation, each scaled to 0-1. Saved next to the graph."""
+    from scipy.ndimage import minimum_filter, uniform_filter
+
+    from .graph import FIXED, Graph
+
+    g = Graph(regions)
+    ps, pe = np.asarray(g.edge_pstart, dtype=np.int64), np.asarray(g.edge_pend, dtype=np.int64)
+    idx = np.concatenate([ps, (ps + pe) // 2, pe])  # sample each edge at its ends and middle
+    lat = np.asarray(g.lat[idx], dtype=np.float64) * FIXED
+    lon = np.asarray(g.lon[idx], dtype=np.float64) * FIXED
+
+    n = 2 ** HIGH_ZOOM
+    px = ((lon + 180) / 360 * n * 256).astype(np.int64)
+    py = ((1 - np.arcsinh(np.tan(np.radians(lat))) / math.pi) / 2 * n * 256).astype(np.int64)
+    used = np.unique((py // 256) * n + px // 256)
+    # Neighbouring tiles too, so the valley floor search never runs off the edge of the data.
+    tiles = sorted({(int(t // n) + dy, int(t % n) + dx) for t in used for dy in (-1, 0, 1) for dx in (-1, 0, 1)})
+    ty0, tx0 = min(t[0] for t in tiles), min(t[1] for t in tiles)
+    ny, nx = max(t[0] for t in tiles) - ty0 + 1, max(t[1] for t in tiles) - tx0 + 1
+    print(f"  elevation: {len(tiles)} terrain tiles (cached in data/dem) ...", flush=True)
+
+    dem = np.zeros((ny * 256, nx * 256), dtype=np.float32)
+    src = Elevation()
+    done = 0
+
+    def fetch(t):
+        return t, src._load((HIGH_ZOOM, t[1], t[0]))
+
+    with ThreadPoolExecutor(8) as pool:
+        for (ty, tx), arr in pool.map(fetch, tiles):
+            dem[(ty - ty0) * 256:(ty - ty0 + 1) * 256, (tx - tx0) * 256:(tx - tx0 + 1) * 256] = arr
+            done += 1
+            if done % 100 == 0:
+                print(f"    {done}/{len(tiles)} tiles", flush=True)
+
+    # Valley floor: lowest ground nearby, on a 4x coarser grid, smoothed so one deep pixel doesn't dominate.
+    block = 4
+    low = dem.reshape(ny * 64, block, nx * 64, block).min(axis=(1, 3))
+    mid_lat = math.radians(float(np.median(lat)))
+    cell_m = 40_075_016 * math.cos(mid_lat) / (n * 256) * block
+    size = 2 * int(RELIEF_RADIUS_M / cell_m) + 1
+    low = uniform_filter(minimum_filter(low, size=size), size=size)
+
+    y, x = py - ty0 * 256, px - tx0 * 256
+    elev = dem[y, x]
+    relief = elev - low[y // block, x // block]
+    h = np.maximum(relief / RELIEF_FULL_M, (elev - ABS_LOW_M) / (ABS_HIGH_M - ABS_LOW_M))
+    h = np.clip(h, 0, 1).reshape(3, -1).mean(axis=0)
+    out = heights_path(regions)
+    np.save(out + ".tmp.npy", np.round(h * 255).astype(np.uint8))
+    os.replace(out + ".tmp.npy", out)
+    print(f"  elevation: scored {len(h):,} road segments; {(h > 0.5).mean():.0%} count as high", flush=True)

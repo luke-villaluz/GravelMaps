@@ -39,6 +39,7 @@ def parse(region):
     lats = array("i")
     lons = array("i")
     attrs = array("b")  # 5 bytes per way: road_class, surface, rough, legal, oneway
+    detail = array("H")
     name_idx = array("i")
     names, name_lookup = [], {}
 
@@ -49,13 +50,17 @@ def parse(region):
     place_pop = array("i")
     barrier_ids = array("q")
     barrier_block = array("B")
+    fuel = []  # [lat, lon, name, brand, hours, diesel]
+    pois = []  # [lat, lon, category, kind, name, details]
 
     # All nodes still feed the location cache; these C++-side filters only trim what reaches
-    # Python: ways need a highway tag, nodes must be a searchable place or a barrier.
+    # Python: ways need a highway tag (or one that marks a gas station, campground, mine etc.
+    # drawn as an outline), nodes must be a searchable place, a barrier or a point of interest.
     fp = (osmium.FileProcessor(src, osmium.osm.NODE | osmium.osm.WAY)
           .with_locations("flex_mem")
-          .with_filter(osmium.filter.KeyFilter("highway").enable_for(osmium.osm.WAY))
-          .with_filter(osmium.filter.TagFilter(*T.PLACE_TAGS, *T.BARRIER_TAGS).enable_for(osmium.osm.NODE)))
+          .with_filter(osmium.filter.KeyFilter("highway", "amenity", *T.POI_WAY_KEYS).enable_for(osmium.osm.WAY))
+          .with_filter(osmium.filter.TagFilter(*T.PLACE_TAGS, *T.BARRIER_TAGS, T.FUEL_TAG, *T.POI_NODE_TAGS)
+                       .enable_for(osmium.osm.NODE)))
 
     def intern(name):
         idx = name_lookup.get(name)
@@ -66,7 +71,13 @@ def parse(region):
 
     count = 0
     for w in fp:
+        is_fuel = w.tags.get("amenity") == "fuel"
         if w.is_node():
+            if is_fuel and w.location.valid():
+                fuel.append([round(w.location.lat, 6), round(w.location.lon, 6), *T.fuel_info(w.tags)])
+            poi = T.poi_info(w.tags)
+            if poi and w.location.valid():
+                pois.append([round(w.location.lat, 6), round(w.location.lon, 6), *poi])
             blocked = T.barrier_blocks(w.tags)
             if blocked:
                 barrier_ids.append(w.id)
@@ -84,6 +95,23 @@ def parse(region):
             except ValueError:
                 place_pop.append(0)
             continue
+        poi = T.poi_info(w.tags) if w.tags.get("highway") in (None, "trailhead") else None
+        if is_fuel or poi:  # an outline: keep its centre
+            pts = [(n.location.lat, n.location.lon) for n in w.nodes if n.location.valid()]
+            if pts:
+                centre = [round(sum(p[0] for p in pts) / len(pts), 6), round(sum(p[1] for p in pts) / len(pts), 6)]
+                if is_fuel:
+                    fuel.append([*centre, *T.fuel_info(w.tags)])
+                if poi:
+                    pois.append([*centre, *poi])
+                # Hotels and the like are often drawn as building outlines; make those searchable too.
+                kind, name = T.place_type(w.tags), T.place_name(w.tags)
+                if kind is not None and name:
+                    place_name_idx.append(intern(name))
+                    place_type.append(kind)
+                    place_lat.append(round(centre[0] * 1e7))
+                    place_lon.append(round(centre[1] * 1e7))
+                    place_pop.append(0)
         info = T.classify(w.tags)
         if info is None:
             continue
@@ -103,6 +131,7 @@ def parse(region):
         lons.extend(lo)
         offsets.append(len(node_ids))
         attrs.extend(info)
+        detail.append(T.detail_code(w.tags))
         name = T.display_name(w.tags)
         name_idx.append(intern(name) if name else -1)
         count += 1
@@ -125,6 +154,7 @@ def parse(region):
         rough=a[:, 2].astype(np.uint8),
         legal=a[:, 3].astype(np.uint8),
         oneway=a[:, 4].copy(),
+        detail=np.frombuffer(detail, dtype=np.uint16),
         name_idx=np.frombuffer(name_idx, dtype=np.int32),
         place_name_idx=np.frombuffer(place_name_idx, dtype=np.int32),
         place_type=np.frombuffer(place_type, dtype=np.int8),
@@ -134,9 +164,11 @@ def parse(region):
         barrier_ids=np.frombuffer(barrier_ids, dtype=np.int64),
         barrier_block=np.frombuffer(barrier_block, dtype=np.uint8),
         names=np.frombuffer(json.dumps(names).encode(), dtype=np.uint8),
+        fuel=np.frombuffer(json.dumps(fuel).encode(), dtype=np.uint8),
+        pois=np.frombuffer(json.dumps(pois).encode(), dtype=np.uint8),
         meta=np.frombuffer(json.dumps(_cache_meta(region)).encode(), dtype=np.uint8),
     )
     os.replace(tmp, out)
     print(f"  {region}: {count:,} routable ways, {len(node_ids):,} points, "
-          f"{len(place_type):,} places, {len(barrier_ids):,} barriers in {time.time() - t0:.0f}s")
+          f"{len(place_type):,} places, {len(barrier_ids):,} barriers, {len(fuel):,} gas stations, {len(pois):,} points of interest in {time.time() - t0:.0f}s")
     return out

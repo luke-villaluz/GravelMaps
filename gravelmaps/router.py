@@ -292,7 +292,7 @@ class Router:
                     np.array(tgts, dtype=np.int64), np.array(tcost, dtype=np.float32),
                     hscale * 0.995)
         if not np.isfinite(cost) and not np.isfinite(direct):
-            if 0 in values:
+            if 0 in values[:len(KINDS)]:
                 raise RouteError("No route with these settings. Try allowing more road types (no sliders at Never).")
             raise RouteError("No legal route found between these points for this vehicle.")
 
@@ -324,10 +324,9 @@ class Router:
             pieces.append((wb, [*self._coords(pe, B.seg + 1), [B.lon, B.lat]]))
         return pieces, settled
 
-    def route(self, points, profile="car", legs=None):
-        """legs: one slider setting per leg (preset name, list or dict); default preset if omitted."""
-        if profile not in PROFILES:
-            raise RouteError(f"Unknown vehicle {profile!r}")
+    def route(self, points, profile="car", legs=None, vehicles=None):
+        """legs: one slider setting per leg (preset name, list or dict); default preset if omitted.
+        vehicles: one profile per leg (e.g. drive the car in, then ride the bike); defaults to `profile`."""
         if len(points) < 2:
             raise RouteError("Need at least a start and an end point.")
         legs = list(legs or [])
@@ -336,23 +335,39 @@ class Router:
             settings = [parse_values(v) for v in legs[: len(points) - 1]]
         except (KeyError, ValueError, TypeError) as err:
             raise RouteError(f"Bad route settings: {err}") from None
-        snaps = [self.snap(lat, lon, profile) for lat, lon in points]
+        n_legs = len(points) - 1
+        vehicles = list(vehicles or [])
+        vehicles += [profile] * (n_legs - len(vehicles))
+        vehicles = vehicles[:n_legs]
+        for v in vehicles:
+            if v not in PROFILES:
+                raise RouteError(f"Unknown vehicle {v!r}")
+        # A stop where the vehicle changes is snapped once per vehicle: the car may park on the
+        # road while the bike starts on the trail next to it.
+        snap_cache = {}
+
+        def snap(i, vehicle):
+            if (i, vehicle) not in snap_cache:
+                snap_cache[i, vehicle] = self.snap(*points[i], vehicle)
+            return snap_cache[i, vehicle]
+
         pieces, settled = [], 0
-        for i in range(len(snaps) - 1):
+        for i in range(n_legs):
             try:
-                leg, s = self._leg(snaps[i], snaps[i + 1], profile, settings[i])
+                leg, s = self._leg(snap(i, vehicles[i]), snap(i + 1, vehicles[i]), vehicles[i], settings[i])
             except RouteError as err:
                 raise RouteError(f"Leg {i + 1}: {err}") from None
             pieces.extend((i, way, coords) for way, coords in leg)
             settled += s
-        return self._assemble(pieces, snaps, profile, settled, len(snaps) - 1)
+        snaps = [snap(i, vehicles[min(i, n_legs - 1)]) for i in range(len(points))]
+        return self._assemble(pieces, snaps, vehicles, settled)
 
-    def _assemble(self, pieces, snaps, profile, settled, n_legs):
+    def _assemble(self, pieces, snaps, vehicles, settled):
         g = self.g
-        speeds = self.weights.speeds[profile]
         features, steps = [], []
         totals = {}
-        legs = [{"distance_m": 0.0, "duration_s": 0.0, "unpaved_m": 0.0} for _ in range(n_legs)]
+        legs = [{"distance_m": 0.0, "duration_s": 0.0, "unpaved_m": 0.0, "vehicle": v} for v in vehicles]
+        prev_leg = 0
         dist_total = time_total = 0.0
         for leg_i, way, coords in pieces:
             if len(coords) < 2:
@@ -365,7 +380,8 @@ class Router:
             kind = KINDS[self.weights.kind[way]]
             ni = int(g.way_name_idx[way])
             name = g.names[ni] if ni >= 0 else ""
-            secs = length / (float(speeds[way]) / 3.6)
+            detail = int(g.way_detail[way])
+            secs = length / (float(self.weights.speeds[vehicles[leg_i]][way]) / 3.6)
             dist_total += length
             time_total += secs
             totals[kind] = totals.get(kind, 0.0) + length
@@ -374,7 +390,7 @@ class Router:
             if kind in ("unpaved", "rough", "trail"):
                 legs[leg_i]["unpaved_m"] += length
             props = features[-1]["properties"] if features else None
-            if props and props["kind"] == kind and props["name"] == name and props["leg"] == leg_i:
+            if props and props["kind"] == kind and props["name"] == name and props["leg"] == leg_i and props["_detail"] == detail:
                 features[-1]["geometry"]["coordinates"].extend(coords[1:])
                 props["distance_m"] += length
             else:
@@ -382,14 +398,22 @@ class Router:
                     "type": "Feature",
                     "geometry": {"type": "LineString", "coordinates": list(coords)},
                     "properties": {"kind": kind, "name": name, "highway": T.ROAD_CLASS_NAMES[rc],
-                                   "distance_m": length, "leg": leg_i},
+                                   "distance_m": length, "leg": leg_i, "_detail": detail,
+                                   "details": T.describe_detail(detail)},
                 })
             label = name or f"unnamed {UNNAMED.get(rc, 'road')}"
+            if leg_i != prev_leg and vehicles[leg_i] != vehicles[prev_leg]:
+                steps.append({"name": f"Switch to {PROFILES[vehicles[leg_i]]['label']}", "kind": "switch",
+                              "vehicle": vehicles[leg_i], "distance_m": 0.0,
+                              "start": [coords[0][1], coords[0][0]]})
+            prev_leg = leg_i
             if steps and steps[-1]["name"] == label:
                 steps[-1]["distance_m"] += length
             else:
                 steps.append({"name": label, "kind": kind, "distance_m": length,
                               "start": [coords[0][1], coords[0][0]]})
+        for f in features:
+            del f["properties"]["_detail"]
         unpaved = sum(totals.get(k, 0.0) for k in ("unpaved", "rough", "trail"))
         return {
             "type": "FeatureCollection",

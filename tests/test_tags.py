@@ -78,3 +78,16 @@ def test_dualsport_extras():
     assert c(highway="track", maxwidth="5'")[3] == T.MOTO
     assert c(highway="track", smoothness="impassable")[3] == T.MOTO
     assert c(highway="track", maxwidth="3")[3] == T.CAR | T.MOTO
+
+
+def test_detail_description():
+    code = T.detail_code({"surface": "gravel", "tracktype": "grade4", "smoothness": "very_bad", "4wd_only": "yes"})
+    assert T.describe_detail(code) == ["Surface: gravel", "Track grade 4: mostly soft dirt or grass",
+                                       "Smoothness: very bad (high clearance needed)", "Tagged 4WD only"]
+    assert T.describe_detail(T.detail_code({"surface": "weird"})) == []
+
+
+def test_lodging_poi():
+    cat, kind, name, info = T.poi_info({"tourism": "motel", "name": "Desert Inn", "phone": "+1 775 555 0100", "stars": "2"})
+    assert (cat, kind, name) == ("lodging", "motel", "Desert Inn") and info == {"phone": "+1 775 555 0100", "stars": 2}
+    assert T.poi_info({"tourism": "chalet"})[1] == "rental"

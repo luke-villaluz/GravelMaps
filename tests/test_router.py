@@ -20,7 +20,7 @@ def data_dir(tmp_path, monkeypatch):
 
 def write_ways(path, ways, barriers=()):
     """ways: list of (way_id, [(node_id, lat, lon), ...], tags); barriers: [(node_id, tags)]."""
-    offsets, nids, lats, lons, attrs, name_idx, names = [0], [], [], [], [], [], []
+    offsets, nids, lats, lons, attrs, name_idx, names, detail = [0], [], [], [], [], [], [], []
     kept = []
     for wid, pts, tags in ways:
         info = T.classify(tags)
@@ -32,6 +32,7 @@ def write_ways(path, ways, barriers=()):
             lons.append(round(lo * 1e7))
         offsets.append(len(nids))
         attrs.append(info)
+        detail.append(T.detail_code(tags))
         name = T.display_name(tags)
         name_idx.append(len(names) if name else -1)
         if name:
@@ -41,7 +42,7 @@ def write_ways(path, ways, barriers=()):
              node_ids=np.array(nids, dtype=np.int64), lat=np.array(lats, dtype=np.int32),
              lon=np.array(lons, dtype=np.int32), road_class=a[:, 0].astype(np.uint8),
              surface=a[:, 1].astype(np.uint8), rough=a[:, 2].astype(np.uint8),
-             legal=a[:, 3].astype(np.uint8), oneway=a[:, 4],
+             legal=a[:, 3].astype(np.uint8), oneway=a[:, 4], detail=np.array(detail, dtype=np.uint16),
              name_idx=np.array(name_idx, dtype=np.int32),
              place_name_idx=np.zeros(0, dtype=np.int32), place_type=np.zeros(0, dtype=np.int8),
              place_lat=np.zeros(0, dtype=np.int32), place_lon=np.zeros(0, dtype=np.int32),
@@ -239,3 +240,46 @@ def test_bollard_blocks_both(data_dir):
     r = _gate_network(data_dir, {"barrier": "bollard"})
     assert {s["name"] for s in r.route([(40.0, -118.0), (40.0, -117.9)], "car")["steps"]} == {"Around"}
     assert {s["name"] for s in r.route([(40.0, -118.0), (40.0, -117.9)], "dualsport")["steps"]} == {"Around"}
+
+
+def test_vehicle_per_leg(data_dir):
+    # Drive the car to the trailhead (node 2), then ride the bike up a moto-only trail.
+    ways = [
+        (1, [(1, 40.0, -118.0), (2, 40.0, -117.9)], {"highway": "track", "name": "Approach"}),
+        (2, [(2, 40.0, -117.9), (3, 40.0, -117.8)], {"highway": "path", "motorcycle": "yes", "name": "Single"}),
+        (3, [(2, 40.0, -117.9), (4, 40.2, -117.85), (3, 40.0, -117.8)], {"highway": "track", "name": "Long"}),
+    ]
+    write_ways(data_dir / "a.npz", ways)
+    r = make_router(["a"])
+    pts = [(40.0, -118.0), (40.0, -117.9), (40.0, -117.8)]
+    res = r.route(pts, legs=["mostly", "mostly"], vehicles=["car", "dualsport"])
+    names = [s["name"] for s in res["steps"]]
+    assert names == ["Approach", "Switch to Dual Sport", "Single"]
+    assert [leg["vehicle"] for leg in res["legs"]] == ["car", "dualsport"]
+    assert [s["name"] for s in r.route(pts, "car")["steps"]] == ["Approach", "Long"]
+    with pytest.raises(R.RouteError):
+        r.route(pts, vehicles=["car", "tank"])
+
+
+def test_ohv_only_road_is_trail_kind(data_dir):
+    ways = [
+        (1, [(1, 40.0, -118.0), (2, 40.0, -117.9)],
+         {"highway": "track", "motor_vehicle": "no", "ohv": "yes", "name": "OHV"}),
+        (2, [(1, 40.0, -118.0), (3, 40.2, -117.95), (2, 40.0, -117.9)], {"highway": "track", "name": "Dirt"}),
+    ]
+    write_ways(data_dir / "a.npz", ways)
+    r = make_router(["a"])
+    pts = [(40.0, -118.0), (40.0, -117.9)]
+    res = r.route(pts, "dualsport")
+    assert [(s["name"], s["kind"]) for s in res["steps"]] == [("OHV", "trail")]
+    no_trail = list(P.PRESETS["mostly"]["values"])
+    no_trail[P.TRAIL] = 0
+    assert {s["name"] for s in r.route(pts, "dualsport", legs=[no_trail])["steps"]} == {"Dirt"}
+    assert {s["name"] for s in r.route(pts, "car")["steps"]} == {"Dirt"}
+
+
+def test_old_seven_value_links_still_parse():
+    from gravelmaps.profiles import PRESETS, SLIDERS, parse_values
+    assert parse_values([50] * 7) == (50,) * 8
+    assert all(len(p["values"]) == len(SLIDERS) for p in PRESETS.values())
+
