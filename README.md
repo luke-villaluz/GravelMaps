@@ -6,37 +6,30 @@ Routing runs on your own machine, and the app opens in your browser at `http://l
 ## Requirements
 
 - macOS or Linux
-- Python 3.10+
-- Git
+- Git (on macOS, typing `git` in Terminal offers to install it)
 - About 6 GB of free disk for the six default states (WA, OR, CA, NV, AZ, UT)
+
+Python 3.10+ is used if you have it. If not, the installer downloads a private copy.
 
 ## Install
 
 ```bash
 git clone https://github.com/luke-villaluz/GravelMaps.git
-cd GravelMaps
-python3 run.py
+GravelMaps/install.sh
 ```
 
-The first run creates a `.venv`, installs dependencies, asks which states to cover, downloads them
-from [Geofabrik](https://download.geofabrik.de/) and builds the routing graph. This takes a few
-minutes. Later starts take seconds. You don't need to activate the venv yourself.
+Then open a new terminal window and run `GravelMaps`.
 
-### Optional: a `GravelMaps` command
+The first run installs dependencies, asks which states to cover, downloads them from
+[Geofabrik](https://download.geofabrik.de/) and builds the routing graph. This takes a few minutes.
+Later starts take seconds.
 
-To run it from any directory:
-
-```bash
-mkdir -p ~/.local/bin
-ln -s "$PWD/run.py" ~/.local/bin/GravelMaps
-```
-
-`~/.local/bin` must be on your `PATH`. If you move the repo, run the `ln` command again with `-sf`.
+If you move the repo folder, run `install.sh` again from its new location.
 
 ## Usage
 
 ```bash
-GravelMaps        # or: python3 run.py
+GravelMaps
 ```
 
 This opens a menu:
@@ -77,6 +70,7 @@ GravelMaps camping --refresh       # re-read the MVUM PDFs
 
 | Path | Contents |
 |---|---|
+| `install.sh` | Creates the `GravelMaps` command in `~/.local/bin` |
 | `run.py` | Launcher: creates the venv, installs deps, runs `python -m gravelmaps` |
 | `gravelmaps/` | Python package: download, parsing, routing graph, router, map tiles, server |
 | `static/` | Web front end (Leaflet) |
