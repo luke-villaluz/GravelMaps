@@ -1,7 +1,5 @@
 """US state extracts available from Geofabrik."""
 
-DEFAULT_REGIONS = ["washington", "oregon", "california", "nevada", "arizona", "utah"]
-
 US_STATES = [
     "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
     "delaware", "district-of-columbia", "florida", "georgia", "hawaii", "idaho", "illinois",
@@ -14,8 +12,16 @@ US_STATES = [
 ]
 
 
+ABBREVIATIONS = dict(zip(
+    "al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj "
+    "nm ny nc nd oh ok or pa pr ri sc sd tn tx ut vt va wa wv wi wy".split(),
+    US_STATES,
+))
+
+
 def normalize(name):
-    return name.strip().lower().replace(" ", "-").replace("_", "-")
+    name = name.strip().lower().replace(" ", "-").replace("_", "-")
+    return ABBREVIATIONS.get(name, name)
 
 
 def url_for(region):
@@ -23,9 +29,9 @@ def url_for(region):
 
 
 def parse_list(text):
-    """Parse 'nevada, New Mexico' -> ['nevada', 'new-mexico']; raises ValueError on unknown names."""
+    """Parse 'nevada, New Mexico, CA' -> ['nevada', 'new-mexico', 'california']; raises ValueError on unknown names."""
     regions = [normalize(r) for r in text.split(",") if r.strip()]
     bad = [r for r in regions if r not in US_STATES]
     if bad:
-        raise ValueError(f"Unknown region(s): {', '.join(bad)}")
+        raise ValueError(f"Not a US state: {', '.join(bad)}")
     return list(dict.fromkeys(regions))

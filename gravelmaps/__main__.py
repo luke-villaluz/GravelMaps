@@ -21,7 +21,7 @@ import requests
 
 from . import build, fetch, graph
 from .paths import CONFIG, DATA, pbf_path
-from .regions import DEFAULT_REGIONS, US_STATES, parse_list
+from .regions import parse_list
 
 
 def load_config():
@@ -39,13 +39,13 @@ def save_config(cfg):
 
 def ask_regions():
     print("\nWhich states should GravelMaps cover?")
-    print("Available: " + ", ".join(US_STATES))
-    print(f"Press Enter for the default: {', '.join(DEFAULT_REGIONS)}")
-    print("(All six take about 2.5 GB of downloads and ~10 minutes to build.)")
+    print("Type names or abbreviations, separated by commas, e.g.  CA  or  california, nevada")
+    print("(Downloads are up to 1.3 GB per state; California is the largest.)")
     while True:
-        text = input("States (comma-separated): ").strip()
+        text = input("States: ").strip()
         if not text:
-            return list(DEFAULT_REGIONS)
+            print("  Enter at least one state.")
+            continue
         try:
             return parse_list(text)
         except ValueError as e:
@@ -57,7 +57,9 @@ def setup(args):
     if args.regions:
         cfg["regions"] = parse_list(args.regions)
     elif not cfg.get("regions"):
-        cfg["regions"] = ask_regions() if sys.stdin.isatty() else list(DEFAULT_REGIONS)
+        if not sys.stdin.isatty():
+            sys.exit("No states chosen yet; run again with --regions, e.g. --regions CA")
+        cfg["regions"] = ask_regions()
     save_config(cfg)
     regions = cfg["regions"]
 

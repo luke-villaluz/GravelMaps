@@ -6,7 +6,7 @@ Routing runs on your own machine, and the app opens in your browser at `http://l
 ## Requirements
 
 - macOS or Linux
-- About 6 GB of free disk for the six default states (WA, OR, CA, NV, AZ, UT)
+- Free disk for your map data: about 3 GB for California, less for any other state
 
 No API keys or accounts. Python 3.10+ is used if you have it; if not, the installer downloads a
 private copy.
@@ -21,9 +21,9 @@ curl -fsSL https://raw.githubusercontent.com/luke-villaluz/GravelMaps/main/insta
 ```
 
 This downloads GravelMaps to `~/GravelMaps` and starts it. On the first start, press Enter to
-choose "Start GravelMaps", then press Enter again to use the default states (or type your own,
-like `colorado, utah`). It downloads the map data and builds the routes, which takes 10–20
-minutes, and then the map opens in your browser.
+choose "Start GravelMaps", then type the states you want, by name or abbreviation (e.g. `CA` or
+`california, nevada`), and press Enter. It downloads the map data and builds the routes, which
+can take 10–20 minutes, and then the map opens in your browser.
 
 After that, open a new terminal window any time and type `GravelMaps`.
 
@@ -62,7 +62,7 @@ Type `q` and press Enter to stop the server. If something is already using the p
 Flags skip the menu:
 
 ```bash
-GravelMaps --regions nevada,utah   # any US states; saved for next time
+GravelMaps --regions CA,NV         # any US states; saved for next time
 GravelMaps --update-data           # re-download OSM data and rebuild
 GravelMaps --rebuild               # rebuild from downloaded data
 GravelMaps --host 0.0.0.0          # reachable on your local network
