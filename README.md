@@ -1,7 +1,7 @@
 # GravelMaps
 
-An offline route planner that favors dirt, gravel and unpaved roads, built on OpenStreetMap data.
-It runs locally and opens in your browser at `http://localhost:8000`.
+A route planner that favors dirt, gravel and unpaved roads, built on OpenStreetMap data.
+Routing runs on your own machine, and the app opens in your browser at `http://localhost:8000`.
 
 ## Requirements
 
