@@ -6,25 +6,37 @@ Routing runs on your own machine, and the app opens in your browser at `http://l
 ## Requirements
 
 - macOS or Linux
-- Git (on macOS, typing `git` in Terminal offers to install it)
 - About 6 GB of free disk for the six default states (WA, OR, CA, NV, AZ, UT)
 
-Python 3.10+ is used if you have it. If not, the installer downloads a private copy.
+No API keys or accounts. Python 3.10+ is used if you have it; if not, the installer downloads a
+private copy.
 
 ## Install
+
+Open Terminal (on a Mac: press Cmd+Space, type "Terminal", press Enter), paste this line and press
+Enter:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/luke-villaluz/GravelMaps/main/install.sh | bash
+```
+
+This downloads GravelMaps to `~/GravelMaps` and starts it. On the first start, press Enter to
+choose "Start GravelMaps", then press Enter again to use the default states (or type your own,
+like `colorado, utah`). It downloads the map data and builds the routes, which takes 10–20
+minutes, and then the map opens in your browser.
+
+After that, open a new terminal window any time and type `GravelMaps`.
+
+To update, paste the same line again. Your map data is kept.
+
+### With Git
 
 ```bash
 git clone https://github.com/luke-villaluz/GravelMaps.git
 GravelMaps/install.sh
 ```
 
-Then open a new terminal window and run `GravelMaps`.
-
-The first run installs dependencies, asks which states to cover, downloads them from
-[Geofabrik](https://download.geofabrik.de/) and builds the routing graph. This takes a few minutes.
-Later starts take seconds.
-
-If you move the repo folder, run `install.sh` again from its new location.
+If you move the repo folder, run `install.sh` again from its new location. Update with `git pull`.
 
 ## Usage
 
