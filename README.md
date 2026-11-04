@@ -94,3 +94,7 @@ GravelMaps camping --refresh       # re-read the MVUM PDFs
 - Routing uses OSM tags only. Check Motor Vehicle Use Maps and land-manager closures before you go.
 - Map data © OpenStreetMap contributors (ODbL). Tiles: Esri, OpenTopoMap. Overlays: BLM, USDA
   Forest Service. Search: Photon, Nominatim. Elevation: AWS Terrain Tiles.
+
+## License
+
+MIT. See [LICENSE](LICENSE). The license covers the code; map data and tiles keep their own terms above.
