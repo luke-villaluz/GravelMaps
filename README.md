@@ -21,9 +21,9 @@ curl -fsSL https://raw.githubusercontent.com/luke-villaluz/GravelMaps/main/insta
 ```
 
 This downloads GravelMaps to `~/GravelMaps` and starts it. On the first start, press Enter to
-choose "Start GravelMaps", then type the states you want, by name or abbreviation (e.g. `CA` or
-`california, nevada`), and press Enter. It downloads the map data and builds the routes, which
-can take 10–20 minutes, and then the map opens in your browser.
+choose "Start GravelMaps", then type the states you want as lowercase two-letter codes
+separated by spaces (e.g. `ca` or `ca nv wa`) and press Enter. It downloads the map data and
+builds the routes, which can take 10–20 minutes, and then the map opens in your browser.
 
 After that, open a new terminal window any time and type `GravelMaps`.
 
@@ -62,7 +62,7 @@ Type `q` and press Enter to stop the server. If something is already using the p
 Flags skip the menu:
 
 ```bash
-GravelMaps --regions CA,NV         # any US states; saved for next time
+GravelMaps --regions ca nv         # state codes; saved for next time
 GravelMaps --update-data           # re-download OSM data and rebuild
 GravelMaps --rebuild               # rebuild from downloaded data
 GravelMaps --host 0.0.0.0          # reachable on your local network

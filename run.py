@@ -2,7 +2,7 @@
 """One-command launcher: sets up a virtualenv, installs deps, builds map data, starts the server.
 
 Usage:  python3 run.py              # interactive menu
-        python3 run.py [--regions nevada,utah] [--rebuild] [--update-data] [--port 8000]
+        python3 run.py [--regions ca nv] [--rebuild] [--update-data] [--port 8000]
 
 Symlink it onto your PATH to get a `GravelMaps` command that works from any directory:
         ln -s "$PWD/run.py" ~/.local/bin/GravelMaps

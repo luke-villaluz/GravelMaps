@@ -21,7 +21,7 @@ import requests
 
 from . import build, fetch, graph
 from .paths import CONFIG, DATA, pbf_path
-from .regions import parse_list
+from .regions import HOW_TO, codes, parse_list
 
 
 def load_config():
@@ -39,7 +39,7 @@ def save_config(cfg):
 
 def ask_regions():
     print("\nWhich states should GravelMaps cover?")
-    print("Type names or abbreviations, separated by commas, e.g.  CA  or  california, nevada")
+    print(HOW_TO + "  (dc and pr work too)")
     print("(Downloads are up to 1.3 GB per state; California is the largest.)")
     while True:
         text = input("States: ").strip()
@@ -55,10 +55,13 @@ def ask_regions():
 def setup(args):
     cfg = load_config()
     if args.regions:
-        cfg["regions"] = parse_list(args.regions)
+        try:
+            cfg["regions"] = parse_list(" ".join(args.regions))
+        except ValueError as e:
+            sys.exit(str(e))
     elif not cfg.get("regions"):
         if not sys.stdin.isatty():
-            sys.exit("No states chosen yet; run again with --regions, e.g. --regions CA")
+            sys.exit("No states chosen yet; run again with --regions, e.g. --regions ca nv")
         cfg["regions"] = ask_regions()
     save_config(cfg)
     regions = cfg["regions"]
@@ -201,11 +204,11 @@ def menu_argv():
     from .menu import choose
 
     regions = load_config().get("regions")
-    title = "GravelMaps" + (f"  ·  covering {', '.join(regions)}" if regions else "")
+    title = "GravelMaps" + (f"  ·  covering {' '.join(codes(regions))}" if regions else "")
     i = choose(title, [(label, hint) for label, hint, _ in MENU])
     argv = None if i is None else MENU[i][2]
     if argv == "regions":
-        argv = ["run", "--regions", ",".join(ask_regions())]
+        argv = ["run", "--regions", *codes(ask_regions())]
     return argv
 
 
@@ -218,7 +221,7 @@ def main():
 
     ap = argparse.ArgumentParser(prog="gravelmaps")
     ap.add_argument("command", nargs="?", default="run", choices=["run", "setup", "serve", "camping"])
-    ap.add_argument("--regions", help="comma-separated states, e.g. nevada,utah (saved for next time)")
+    ap.add_argument("--regions", nargs="+", metavar="CODE", help="state codes, e.g. ca nv (saved for next time)")
     ap.add_argument("--rebuild", action="store_true", help="re-parse and rebuild the graph")
     ap.add_argument("--update-data", action="store_true", help="re-download fresh OSM data")
     ap.add_argument("--refresh", action="store_true", help="with `camping`: download and re-read every MVUM PDF")

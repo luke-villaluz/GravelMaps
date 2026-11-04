@@ -12,16 +12,14 @@ US_STATES = [
 ]
 
 
-ABBREVIATIONS = dict(zip(
+CODES = dict(zip(
+    US_STATES,
     "al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj "
     "nm ny nc nd oh ok or pa pr ri sc sd tn tx ut vt va wa wv wi wy".split(),
-    US_STATES,
 ))
+STATES = {code: name for name, code in CODES.items()}
 
-
-def normalize(name):
-    name = name.strip().lower().replace(" ", "-").replace("_", "-")
-    return ABBREVIATIONS.get(name, name)
+HOW_TO = "Use lowercase two-letter state codes separated by spaces, like: ca nv wa"
 
 
 def url_for(region):
@@ -29,9 +27,13 @@ def url_for(region):
 
 
 def parse_list(text):
-    """Parse 'nevada, New Mexico, CA' -> ['nevada', 'new-mexico', 'california']; raises ValueError on unknown names."""
-    regions = [normalize(r) for r in text.split(",") if r.strip()]
-    bad = [r for r in regions if r not in US_STATES]
+    """Parse 'ca nv' (or 'ca,nv') -> ['california', 'nevada']; raises ValueError on anything else."""
+    codes = text.replace(",", " ").split()
+    bad = [c for c in codes if c not in STATES]
     if bad:
-        raise ValueError(f"Not a US state: {', '.join(bad)}")
-    return list(dict.fromkeys(regions))
+        raise ValueError(f"Not a state code: {' '.join(bad)}. {HOW_TO}")
+    return list(dict.fromkeys(STATES[c] for c in codes))
+
+
+def codes(regions):
+    return [CODES[r] for r in regions]
