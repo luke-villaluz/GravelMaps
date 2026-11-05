@@ -8,13 +8,17 @@ TARBALL="https://codeload.github.com/luke-villaluz/GravelMaps/tar.gz/refs/heads/
 BIN="$HOME/.local/bin"
 CMD="$BIN/GravelMaps"
 
+# Intel Macs top out at Python 3.13: numba has no Intel Mac builds for anything newer.
+if [ "$(uname -s)-$(uname -m)" = Darwin-x86_64 ]; then MAX_MINOR=13; else MAX_MINOR=99; fi
+
 # A Python 3.10+ to launch run.py with (run.py then builds its own .venv).
 find_python() {
   local name py
   for name in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
     while IFS= read -r py; do
       # Skip virtualenv pythons: they break if that venv is deleted.
-      if "$py" -c 'import sys; sys.exit(sys.version_info < (3, 10) or sys.prefix != sys.base_prefix)' 2>/dev/null; then
+      if "$py" -c "import sys; v = sys.version_info; sys.exit(v < (3, 10) or v[1] > $MAX_MINOR or sys.prefix != sys.base_prefix)" \
+          2>/dev/null; then
         echo "$py"
         return
       fi
