@@ -88,6 +88,8 @@ def setup(args):
             elevation.build_edge_heights(regions)
         except requests.RequestException as e:
             print(f"  skipped, couldn't download terrain ({e}); the High Elevation slider stays off.")
+        except Exception as e:  # optional: never let it stop GravelMaps from starting
+            print(f"  skipped ({type(e).__name__}: {e}); the High Elevation slider stays off.")
 
     # Dispersed camping rules from the forests' MVUM PDFs. Optional: without it that overlay is hidden.
     from . import camping
@@ -103,6 +105,8 @@ def build_camping(regions, refresh):
         camping.build(regions, refresh=refresh)
     except requests.RequestException as e:
         print(f"  skipped, couldn't reach the Forest Service ({e}); the camping overlay stays off.")
+    except Exception as e:  # optional: never let it stop GravelMaps from starting
+        print(f"  skipped ({type(e).__name__}: {e}); the camping overlay stays off.")
 
 
 def open_browser(url):

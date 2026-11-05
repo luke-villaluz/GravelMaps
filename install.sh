@@ -78,9 +78,11 @@ EOF
   chmod +x "$CMD"
   echo "Installed $CMD"
 
+  local on_path=1
   case ":$PATH:" in
     *":$BIN:"*) ;;
     *)
+      on_path=0
       line='export PATH="$HOME/.local/bin:$PATH"'
       for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
         # zsh is the macOS default, so always set up .zshrc there; otherwise only touch existing files.
@@ -92,7 +94,12 @@ EOF
   esac
 
   echo
-  echo "Done. From now on, open a terminal window and type:  GravelMaps"
+  if [ "$on_path" = 1 ]; then
+    echo "Done. From now on, open a terminal window and type:  GravelMaps"
+  else
+    echo "Done. From now on, open a NEW terminal window and type:  GravelMaps"
+    echo "(This window doesn't know the command yet. Here, use:  ~/.local/bin/GravelMaps)"
+  fi
   # Start it right away when there's someone at the keyboard. Under `curl | bash` stdin is the
   # script itself, so read keys from the terminal instead.
   if [ -t 1 ] && { : </dev/tty; } 2>/dev/null; then
