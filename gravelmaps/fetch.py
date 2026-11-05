@@ -6,6 +6,7 @@ import time
 
 import requests
 
+from . import USER_AGENT
 from .paths import pbf_path
 from .regions import url_for
 
@@ -50,7 +51,7 @@ def fetch(region, force=False):
             print(f"\n  connection dropped, resuming ({attempt}/{ATTEMPTS - 1}) ...")
             time.sleep(3 * attempt)
 
-    expected = requests.get(url + ".md5", timeout=60)
+    expected = requests.get(url + ".md5", headers={"User-Agent": USER_AGENT}, timeout=60)
     if expected.ok:
         want = expected.text.split()[0]
         if _md5(part) != want:
@@ -62,7 +63,7 @@ def fetch(region, force=False):
 
 def _download(region, url, part):
     done = os.path.getsize(part) if os.path.exists(part) else 0
-    headers = {"Range": f"bytes={done}-"} if done else {}
+    headers = {"User-Agent": USER_AGENT, **({"Range": f"bytes={done}-"} if done else {})}
     with requests.get(url, stream=True, headers=headers, timeout=60) as r:
         if r.status_code == 416:  # .part is already complete
             return

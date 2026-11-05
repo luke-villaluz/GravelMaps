@@ -5,8 +5,9 @@ import time
 import requests
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from . import USER_AGENT
 from .camping import CampingIndex
 from .elevation import Elevation
 from .graph import Graph
@@ -17,19 +18,23 @@ from .tiles import RoadTiles
 
 PHOTON = "https://photon.komoot.io/api/"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "GravelMaps/0.1 (personal back-road router; https://github.com/)"
 LATLON = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$")
 
 
+# Size limits keep one request from tying up the server: far beyond any real trip, still bounded.
+MAX_STOPS = 50
+MAX_ELEVATION_COORDS = 500_000
+
+
 class RouteRequest(BaseModel):
-    points: list[tuple[float, float]]
+    points: list[tuple[float, float]] = Field(min_length=2, max_length=MAX_STOPS)
     profile: str = "car"
-    legs: list[list[float] | str] = []
-    vehicles: list[str] = []  # per leg; defaults to `profile`
+    legs: list[list[float] | str] = Field(default=[], max_length=MAX_STOPS)
+    vehicles: list[str] = Field(default=[], max_length=MAX_STOPS)  # per leg; defaults to `profile`
 
 
 class ElevationRequest(BaseModel):
-    coords: list[tuple[float, float]]  # [lon, lat]
+    coords: list[tuple[float, float]] = Field(max_length=MAX_ELEVATION_COORDS)  # [lon, lat]
 
 
 def create_app(regions):
@@ -63,7 +68,7 @@ def create_app(regions):
         try:
             res = router.route(req.points, req.profile, req.legs, req.vehicles)
         except RouteError as e:
-            raise HTTPException(422, str(e))
+            raise HTTPException(422, str(e)) from e
         res["fuel"] = g.fuel.along([c for f in res["features"] for c in f["geometry"]["coordinates"]])
         return res
 
@@ -97,9 +102,9 @@ def create_app(regions):
         try:
             return elevation.profile(req.coords)
         except ValueError as e:
-            raise HTTPException(400, str(e))
+            raise HTTPException(400, str(e)) from e
         except (requests.RequestException, OSError) as e:
-            raise HTTPException(502, f"Elevation data unavailable: {e}")
+            raise HTTPException(502, f"Elevation data unavailable: {e}") from e
 
     @app.get("/api/geocode")
     def geocode(q: str, lat: float | None = None, lon: float | None = None, remote: bool = True):
@@ -119,7 +124,7 @@ def create_app(regions):
             except requests.RequestException as err:
                 if local:
                     return local
-                raise HTTPException(502, f"Search service unavailable: {err}")
+                raise HTTPException(502, f"Search service unavailable: {err}") from err
         for hit in online:
             dup = any(h["name"] == hit["name"] and abs(h["lat"] - hit["lat"]) + abs(h["lon"] - hit["lon"]) < 0.05
                       for h in local)
@@ -163,7 +168,7 @@ def create_app(regions):
 
     @app.middleware("http")
     async def revalidate_ui(request, call_next):
-        # Make browsers check for a newer app.js/style.css on every load instead of reusing a stale copy.
+        # Make browsers check for newer js/ modules and style.css on every load instead of reusing a stale copy.
         response = await call_next(request)
         if not request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-cache"

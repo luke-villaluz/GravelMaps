@@ -157,6 +157,7 @@ def alive(pid):
 
 def serve(args, regions=None):
     import uvicorn
+
     from .server import create_app
 
     regions = regions or load_config().get("regions")

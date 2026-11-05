@@ -30,6 +30,7 @@ import time
 import numpy as np
 import requests
 
+from . import USER_AGENT
 from .paths import DATA
 
 CAMP_DIR = os.path.join(DATA, "camping")
@@ -40,7 +41,6 @@ FS = "https://www.fs.usda.gov"
 EDW = "https://apps.fs.usda.gov/arcx/rest/services/EDW"
 AGOL = "https://services1.arcgis.com/gGHDlz6USftL5Pau/arcgis/rest/services"
 ESSRP = "https://services7.arcgis.com/f7OwBgqAiLjK3YHc/arcgis/rest/services/No_Dispersed_Camping/FeatureServer/0"
-USER_AGENT = "GravelMaps (personal trip planner; reads public MVUM PDFs)"
 FS_GAP_S = 1.0  # seconds between requests to www.fs.usda.gov
 
 # Regions 4 and 5 publish an index of their MVUM PDFs with each map's footprint.
@@ -130,7 +130,8 @@ def _arcgis_query(http, url, where="1=1", fields="*", geometry=True, offset_deg=
                     raise
                 time.sleep(2 + 3 * attempt)
         feats += fc["features"]
-        if len(fc["features"]) < page and not fc.get("exceededTransferLimit") and not fc.get("properties", {}).get("exceededTransferLimit"):
+        more = fc.get("exceededTransferLimit") or fc.get("properties", {}).get("exceededTransferLimit")
+        if len(fc["features"]) < page and not more:
             return feats
         start += len(fc["features"])
         if not fc["features"]:
@@ -233,10 +234,12 @@ def _camp_rules(text):
         if not re.search(r"permitted|allowed", rest, re.I):
             continue
         # "300 feet from the centerline of the road and 100 feet from the centerline of the trail"
-        pairs = re.findall(_FEET + r"\s*(?:from|of)\s*(?:the\s*)?cent(?:er|re)\s*line\s*of\s*(?:the\s*|all\s*|a\s*)?(roads?|trails?)", s, re.I)
+        pairs = re.findall(_FEET + r"\s*(?:from|of)\s*(?:the\s*)?cent(?:er|re)\s*line\s*of\s*(?:the\s*|all\s*|a\s*)?"
+                           r"(roads?|trails?)", s, re.I)
         if len(pairs) > 1:
             for ft, what in pairs:
-                rules.append({"applies": "trails" if what.lower().startswith("trail") else "roads", "ft": int(ft), "text": s})
+                applies = "trails" if what.lower().startswith("trail") else "roads"
+                rules.append({"applies": applies, "ft": int(ft), "text": s})
             continue
         ft = re.search(_FEET, rest, re.I)
         if not ft:
@@ -311,7 +314,10 @@ def _dots(page, ref):
     bb, height, _ = ref
     x0, x1 = min(bb[0], bb[2]), max(bb[0], bb[2])
     y0, y1 = height - max(bb[1], bb[3]), height - min(bb[1], bb[3])
-    inside = lambda cx, cy: x0 <= cx <= x1 and y0 <= cy <= y1
+
+    def inside(cx, cy):
+        return x0 <= cx <= x1 and y0 <= cy <= y1
+
     styles = {}
     for block in page.get_text("rawdict")["blocks"]:
         for line in block.get("lines", []):
@@ -328,7 +334,8 @@ def _dots(page, ref):
             cx, cy = (s["bbox"][0] + s["bbox"][2]) / 2, (s["bbox"][1] + s["bbox"][3]) / 2
             if inside(cx, cy):
                 continue  # on the map; legend samples sit outside the frame
-            labels.add(" ".join(w[4] for w in words if abs((w[1] + w[3]) / 2 - cy) < 5 and s["bbox"][2] - 2 < w[0] < s["bbox"][2] + 300))
+            labels.add(" ".join(w[4] for w in words
+                                if abs((w[1] + w[3]) / 2 - cy) < 5 and s["bbox"][2] - 2 < w[0] < s["bbox"][2] + 300))
         camping = any(re.search(r"dispersed|camping|game retrieval", t, re.I) for t in labels)
         other = any(re.search(r"motorcycle|open to|vehicles", t, re.I) and not re.search(r"dispersed|camping", t, re.I)
                     for t in labels)
@@ -637,7 +644,8 @@ def build(regions, refresh=False):
     out_sheets = []
     for i, s in enumerate(sheets):
         key = _norm_forest(s["forest"])
-        forest = edw_names.get(key) or next((v for k, v in edw_names.items() if key and (k.startswith(key) or key.startswith(k))), s["forest"])
+        forest = edw_names.get(key) or next(
+            (v for k, v in edw_names.items() if key and (k.startswith(key) or key.startswith(k))), s["forest"])
         out_sheets.append({
             "i": i, "forest": forest, "title": s["title"] or forest, "year": s.get("year"), "url": s["url"],
             "area": s["footprint"] or s["frame"], "rules": s["rules"], "prohibited": s["prohibited"],
@@ -683,7 +691,8 @@ def build(regions, refresh=False):
 
 def _forest_names(http):
     params = {"where": "1=1", "outFields": "forestname", "groupByFieldsForStatistics": "forestname",
-              "outStatistics": json.dumps([{"statisticType": "count", "onStatisticField": "objectid", "outStatisticFieldName": "n"}]),
+              "outStatistics": json.dumps([{"statisticType": "count", "onStatisticField": "objectid",
+                                            "outStatisticFieldName": "n"}]),
               "f": "json"}
     r = http.get(f"{EDW}/EDW_MVUM_01/MapServer/1/query", params=params, timeout=120)
     r.raise_for_status()
@@ -721,7 +730,8 @@ class CampingIndex:
             z["bbox"] = (min(xs), min(ys), max(xs), max(ys))
         for s in self.sheets:
             pts = [p for ring in s["area"] for p in ring]
-            s["bbox"] = (min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts)) if pts else None
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            s["bbox"] = (min(xs), min(ys), max(xs), max(ys)) if pts else None
 
     def in_bbox(self, s, w, n, e, limit=6000):
         """Roads with camping info, no-camping areas and listed sites in a map view."""
@@ -735,7 +745,8 @@ class CampingIndex:
             b = r["bbox"]
             if b[2] < w or b[0] > e or b[3] < s or b[1] > n:
                 continue
-            roads.append({k: r[k] for k in ("id", "name", "t", "s", "c")} | {k: r[k] for k in ("ft", "side", "how", "src") if r.get(k) is not None})
+            roads.append({k: r[k] for k in ("id", "name", "t", "s", "c")}
+                         | {k: r[k] for k in ("ft", "side", "how", "src") if r.get(k) is not None})
         zones = [{k: z[k] for k in ("name", "note", "url", "rings", "src")} for z in self.zones
                  if not (z["bbox"][2] < w or z["bbox"][0] > e or z["bbox"][3] < s or z["bbox"][1] > n)]
         sites = [x for x in self.sites if s <= x["lat"] <= n and w <= x["lon"] <= e]
@@ -746,13 +757,14 @@ class CampingIndex:
         hits = [sh for sh in self.sheets if sh["bbox"] and sh["bbox"][0] <= lon <= sh["bbox"][2]
                 and sh["bbox"][1] <= lat <= sh["bbox"][3] and _in_polys(lon, lat, sh["area"])]
         hits.sort(key=lambda sh: -(sh["year"] or 0))
-        sheets = [{k: sh[k] for k in ("i", "forest", "title", "year", "url", "rules", "prohibited", "notes", "tables", "dots", "has_text")}
-                  for sh in hits[:4]]
+        fields = ("i", "forest", "title", "year", "url", "rules", "prohibited", "notes", "tables", "dots", "has_text")
+        sheets = [{k: sh[k] for k in fields} for sh in hits[:4]]
         for sh in sheets:
             if not (sh["rules"] or sh["prohibited"] or sh["tables"] or sh["dots"]):
                 sh["roadside"] = ROADSIDE
         zones = [{k: z[k] for k in ("name", "note", "url", "src")} for z in self.zones
-                 if z["bbox"][0] <= lon <= z["bbox"][2] and z["bbox"][1] <= lat <= z["bbox"][3] and _in_polys(lon, lat, z["rings"])]
+                 if z["bbox"][0] <= lon <= z["bbox"][2] and z["bbox"][1] <= lat <= z["bbox"][3]
+                 and _in_polys(lon, lat, z["rings"])]
         return {"sheets": sheets, "zones": zones, "built": self.built}
 
     def sheet(self, i):

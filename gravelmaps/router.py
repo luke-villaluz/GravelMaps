@@ -11,7 +11,6 @@ from . import tags as T
 from .graph import EARTH_R, FIXED, haversine
 from .profiles import DEFAULT_PRESET, KINDS, PROFILES, Weights, parse_values
 
-
 UNNAMED = {T.TRACK: "track", T.PATH: "trail", T.SERVICE: "service road", T.RESIDENTIAL: "street"}
 
 
@@ -265,15 +264,24 @@ class Router:
         wa, ma, la, owa = ends(A)
         wb, mb, lb, owb = ends(B)
         srcs, scost, sdir = [], [], []
+        # Leave A's edge from either end (unless one-way), paying for the part of it still to drive.
         if owa != -1:
-            srcs.append(int(g.edge_dst[A.edge])); scost.append(max(la - A.along, 0) * ma); sdir.append(1)
+            srcs.append(int(g.edge_dst[A.edge]))
+            scost.append(max(la - A.along, 0) * ma)
+            sdir.append(1)
         if owa != 1:
-            srcs.append(int(g.edge_src[A.edge])); scost.append(A.along * ma); sdir.append(-1)
+            srcs.append(int(g.edge_src[A.edge]))
+            scost.append(A.along * ma)
+            sdir.append(-1)
         tgts, tcost, tdir = [], [], []
         if owb != -1:
-            tgts.append(int(g.edge_src[B.edge])); tcost.append(B.along * mb); tdir.append(1)
+            tgts.append(int(g.edge_src[B.edge]))
+            tcost.append(B.along * mb)
+            tdir.append(1)
         if owb != 1:
-            tgts.append(int(g.edge_dst[B.edge])); tcost.append(max(lb - B.along, 0) * mb); tdir.append(-1)
+            tgts.append(int(g.edge_dst[B.edge]))
+            tcost.append(max(lb - B.along, 0) * mb)
+            tdir.append(-1)
 
         direct = np.inf
         direct_dir = 0
@@ -306,7 +314,10 @@ class Router:
             return pieces, settled
 
         codes = g.csr_code[entries]
-        first_node = int(g.edge_src[codes[0] >> 1] if (codes[0] & 1) == 0 else g.edge_dst[codes[0] >> 1]) if len(codes) else tgts[k]
+        if len(codes):
+            first_node = int(g.edge_src[codes[0] >> 1] if (codes[0] & 1) == 0 else g.edge_dst[codes[0] >> 1])
+        else:
+            first_node = tgts[k]
         start_dir = sdir[srcs.index(first_node)] if first_node in srcs else sdir[0]
         ps, pe = int(g.edge_pstart[A.edge]), int(g.edge_pend[A.edge])
         if start_dir == 1:
@@ -390,7 +401,8 @@ class Router:
             if kind in ("unpaved", "rough", "trail"):
                 legs[leg_i]["unpaved_m"] += length
             props = features[-1]["properties"] if features else None
-            if props and props["kind"] == kind and props["name"] == name and props["leg"] == leg_i and props["_detail"] == detail:
+            same = props and (props["kind"], props["name"], props["leg"], props["_detail"]) == (kind, name, leg_i, detail)
+            if same:
                 features[-1]["geometry"]["coordinates"].extend(coords[1:])
                 props["distance_m"] += length
             else:

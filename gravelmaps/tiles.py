@@ -73,7 +73,8 @@ def _coarse_index(g, edges):
     cx = np.floor(g.lon[idx] * FIXED / MAIN_GRID_DEG).astype(np.int64)
     cells = (cy - cy.min()) * (cx.max() - cx.min() + 1) + (cx - cx.min())
     pairs = np.unique(np.column_stack([cells, np.repeat(edges, lengths)]), axis=0)
-    return pairs[:, 0], pairs[:, 1], (int(cy.min()), int(cx.min()), int(cx.max() - cx.min() + 1), int(cy.max() - cy.min() + 1))
+    origin = (int(cy.min()), int(cx.min()), int(cx.max() - cx.min() + 1), int(cy.max() - cy.min() + 1))
+    return pairs[:, 0], pairs[:, 1], origin
 
 
 class RoadTiles:

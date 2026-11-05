@@ -170,5 +170,6 @@ def parse(region):
     )
     os.replace(tmp, out)
     print(f"  {region}: {count:,} routable ways, {len(node_ids):,} points, "
-          f"{len(place_type):,} places, {len(barrier_ids):,} barriers, {len(fuel):,} gas stations, {len(pois):,} points of interest in {time.time() - t0:.0f}s")
+          f"{len(place_type):,} places, {len(barrier_ids):,} barriers, {len(fuel):,} gas stations, "
+          f"{len(pois):,} points of interest in {time.time() - t0:.0f}s")
     return out

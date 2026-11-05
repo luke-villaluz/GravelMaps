@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 125
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+# zip(strict=) is noise for arrays built to match.
+ignore = ["B905"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

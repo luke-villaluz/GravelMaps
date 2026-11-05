@@ -12,6 +12,7 @@ import numpy as np
 import requests
 from PIL import Image
 
+from . import USER_AGENT
 from .graph import haversine
 from .paths import DATA
 
@@ -24,7 +25,7 @@ HYSTERESIS_M = 5  # ignore wiggles smaller than this when totalling climb, to fi
 class Elevation:
     def __init__(self):
         self.http = requests.Session()
-        self.http.headers["User-Agent"] = "GravelMaps/0.1"
+        self.http.headers["User-Agent"] = USER_AGENT
         self.lock = threading.Lock()
         self.tiles = OrderedDict()  # (z, x, y) -> float32 (256, 256), LRU
 

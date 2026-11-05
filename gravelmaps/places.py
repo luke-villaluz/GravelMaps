@@ -58,7 +58,8 @@ def pretty_region(r):
 
 
 def build(sources, out_path):
-    """Merge (region, way cache path) sources' places into one JSON list: [name, type, lat, lon, population, region, near]."""
+    """Merge (region, way cache path) sources' places into one JSON list:
+    [name, type, lat, lon, population, region, near]."""
     rows, seen = [], set()
     for r, path in sources:
         with np.load(path) as z:

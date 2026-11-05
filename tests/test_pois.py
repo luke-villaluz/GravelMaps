@@ -46,7 +46,9 @@ def test_along_route_and_longest_gap(tmp_path):
 
 
 def test_poi_kinds():
-    kind = lambda **t: (T.poi_info(t) or [None, None])[:2]
+    def kind(**t):
+        return (T.poi_info(t) or [None, None])[:2]
+
     assert kind(tourism="camp_site", name="Forest Rd 12 Dispersed") == ["camp", "dispersed"]
     assert kind(tourism="camp_site", camp_type="wildcamp") == ["camp", "dispersed"]
     assert kind(tourism="camp_site", name="Oak Flat Campground") == ["camp", "campground"]

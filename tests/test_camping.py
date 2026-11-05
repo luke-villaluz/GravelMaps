@@ -8,7 +8,8 @@ DIXIE = ("VICINITY MAP Dispersed Camping: Motor Vehicle use off of designated ro
          "period of 01/01 to 12/31. North American Datum of 1983")
 BOISE = ("motor vehicle use off of designated roads and trails for the purposes of dispersed camping is permitted for up "
          "to 300 feet from the centerline of the road and 100 feet from the centerline of the trail when it is safe to do "
-         "so. Dispersed camping not allowed in the Grimes Creek along roads 261 and 364 in sections 21,22,27. Roads remain open.")
+         "so. Dispersed camping not allowed in the Grimes Creek along roads 261 and 364 in sections 21,22,27. "
+         "Roads remain open.")
 MODOC = ("Seasonal Designation Table Dispersed Camping Motor vehicle use off of designated roads for the purpose of "
          "dispersed camping is permitted on National Forest Lands for up to 30 ft. from the centerline of the road.")
 CLEVELAND = ("All routes with a seasonal designation are open to High Clearance Vehicles. Motorized vehicle use off "

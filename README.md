@@ -1,5 +1,7 @@
 # GravelMaps
 
+[![CI](https://github.com/luke-villaluz/GravelMaps/actions/workflows/ci.yml/badge.svg)](https://github.com/luke-villaluz/GravelMaps/actions/workflows/ci.yml)
+
 A route planner that favors dirt, gravel and unpaved roads, built on OpenStreetMap data.
 Routing runs on your own machine, and the app opens in your browser at `http://localhost:8000`.
 
@@ -71,12 +73,18 @@ GravelMaps serve                   # start the server without setup checks
 GravelMaps camping --refresh       # re-read the MVUM PDFs
 ```
 
-## Tests
+## Development
 
 ```bash
-.venv/bin/pip install pytest
-.venv/bin/python -m pytest
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/ruff check .                   # Python lint
+.venv/bin/python -m pytest               # Python tests
+npx eslint@10.14.0 static/js tests/js    # front-end lint (needs Node)
+node --test "tests/js/*.test.mjs"        # front-end tests
 ```
+
+GitHub Actions runs all of these on every push, on Linux and macOS (Apple Silicon and Intel), and
+also tests `install.sh`.
 
 ## Project layout
 
@@ -85,8 +93,8 @@ GravelMaps camping --refresh       # re-read the MVUM PDFs
 | `install.sh` | Creates the `GravelMaps` command in `~/.local/bin` |
 | `run.py` | Launcher: creates the venv, installs deps, runs `python -m gravelmaps` |
 | `gravelmaps/` | Python package: download, parsing, routing graph, router, map tiles, server |
-| `static/` | Web front end (Leaflet) |
-| `tests/` | pytest suite |
+| `static/` | Web front end: `index.html`, `style.css`, and ES modules in `js/` (entry point `js/main.js`) |
+| `tests/` | pytest suite, plus Node tests for the front end in `tests/js/` |
 | `data/` | Downloaded and built data (not in git) |
 
 ## Notes
