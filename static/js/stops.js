@@ -1,7 +1,7 @@
 // Stops: the input rows, their map markers, clicking the map to set them, and "my location".
 
 import { $, esc, fmtLL, setStatus } from "./util.js";
-import { insertStop, state, stopRole } from "./state.js";
+import { dropIndex, insertStop, moveStop, state, stopRole } from "./state.js";
 import { map, markerLayer } from "./map.js";
 import { attachSearch } from "./search.js";
 import { showMvumInfo } from "./mvum.js";
@@ -26,13 +26,57 @@ export function renderStops() {
     row.className = "stop";
     const ph = role === "start" ? "Start — or “Big Sur to Monterey”" : role === "end" ? "Destination" : "Stop";
     row.innerHTML = `
-      <span class="dot ${role}">${role === "via" ? i : ""}</span>
+      <span class="handle" title="Drag to reorder"><span class="dot ${role}">${role === "via" ? i : ""}</span>
+        <svg class="grip" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 6.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM18 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM16.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM18 18.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/></svg></span>
       <input type="text" placeholder="${ph}" value="${s ? esc(s.label) : ""}" autocomplete="off" spellcheck="false" enterkeyhint="search">
       ${role === "via" ? `<button class="remove" aria-label="Remove stop">✕</button>` : ""}`;
     attachSearch(row.querySelector("input"), row, i);
     row.querySelector(".remove")?.addEventListener("click", () => removeStop(i));
+    row.querySelector(".handle").addEventListener("pointerdown", (ev) => startDrag(ev, row, i));
     box.appendChild(row);
   });
+}
+
+// ---------- drag a stop row up or down to reorder, like Google Maps ----------
+function startDrag(ev, row, from) {
+  if (ev.button !== 0) return;
+  ev.preventDefault();
+  const box = $("stops");
+  const rows = [...box.children];
+  const rects = rows.map((r) => r.getBoundingClientRect());
+  const pitch = rects.length > 1 ? rects[1].top - rects[0].top : rects[0].height;
+  const startY = ev.clientY;
+  const centre0 = rects[from].top + rects[from].height / 2;
+  const mids = rects.filter((_, k) => k !== from).map((r) => r.top + r.height / 2);
+  const first = rects[0].top, last = rects[rects.length - 1].top;
+  let to = from, moved = false;
+
+  const handle = ev.currentTarget;
+  handle.setPointerCapture(ev.pointerId);
+  const move = (e) => {
+    const dy = Math.max(first - rects[from].top, Math.min(last - rects[from].top, e.clientY - startY));
+    if (!moved && Math.abs(dy) < 4) return; // a click, not a drag
+    if (!moved) { moved = true; box.classList.add("dragging"); row.classList.add("lifted"); }
+    row.style.transform = `translateY(${dy}px)`;
+    to = dropIndex(centre0 + dy, mids);
+    // Make room: rows between the old and new place slide one row over.
+    rows.forEach((r, k) => {
+      if (k === from) return;
+      const shift = from < to && k > from && k <= to ? -pitch : from > to && k >= to && k < from ? pitch : 0;
+      r.style.transform = shift ? `translateY(${shift}px)` : "";
+    });
+  };
+  const end = () => {
+    handle.removeEventListener("pointermove", move);
+    handle.removeEventListener("pointerup", end);
+    handle.removeEventListener("pointercancel", end);
+    box.classList.remove("dragging");
+    rows.forEach((r) => { r.style.transform = ""; r.classList.remove("lifted"); });
+    if (moved && moveStop(from, to)) update();
+  };
+  handle.addEventListener("pointermove", move);
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
 }
 
 let meMarker = null;

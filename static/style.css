@@ -125,6 +125,21 @@ button { font: inherit; color: inherit; }
   border-left: 2px dotted var(--label-3);
 }
 .stop .dot { position: relative; z-index: 1; flex: none; width: 20px; height: 20px; display: grid; place-items: center; }
+/* The dot doubles as a drag handle: on hover it turns into a grip. */
+.stop .handle {
+  position: relative; z-index: 1; flex: none; width: 20px; height: 40px; display: grid; place-items: center;
+  cursor: grab; touch-action: none;
+}
+.stop .handle .grip { display: none; width: 20px; height: 20px; color: var(--label-2); }
+@media (hover: hover) {
+  .stop:hover .handle .dot, .stops-card .dragging .lifted .handle .dot { display: none; }
+  .stop:hover .handle .grip, .stops-card .dragging .lifted .handle .grip { display: block; }
+}
+.stop { transition: transform 0.15s ease; }
+#stops.dragging, #stops.dragging * { cursor: grabbing; user-select: none; }
+#stops.dragging .stop::before { visibility: hidden; } /* connectors would point the wrong way mid-drag */
+.stop.lifted { transition: none; z-index: 5; }
+.stop.lifted input { box-shadow: var(--shadow-2); }
 .stop .dot.start::after {
   content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--label); background: var(--surface);
 }

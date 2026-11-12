@@ -43,6 +43,18 @@ export function syncLegs() {
   state.activeLeg = Math.min(state.activeLeg, n - 1);
 }
 
+// Drag-to-reorder: stop `from` moves to position `to`. Leg styles stay with their place in the
+// list (the 2nd leg keeps the 2nd leg's style), as the stops between them change.
+export function moveStop(from, to) {
+  if (from === to) return false;
+  const [s] = state.stops.splice(from, 1);
+  state.stops.splice(to, 0, s);
+  return true;
+}
+
+// Where a dragged row lands: how many of the other rows' midpoints its centre has reached.
+export const dropIndex = (y, mids) => mids.filter((m) => m <= y).length;
+
 export function insertStop(i, stop) {
   // A new stop splits leg i-1 in two; both halves keep its style.
   state.stops.splice(i, 0, stop);
