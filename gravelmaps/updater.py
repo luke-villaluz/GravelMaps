@@ -129,8 +129,16 @@ def _extract_app(dmg, dest):
     shutil.rmtree(dest, ignore_errors=True)
     os.makedirs(dest)
     mount = tempfile.mkdtemp(prefix="gravelmaps-update-")
-    subprocess.run(["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mount, dmg],
-                   check=True, capture_output=True)
+    # hdiutil sometimes fails at first ("Resource temporarily unavailable"), so try a few times.
+    for attempt in range(4):
+        r = subprocess.run(["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mount, dmg],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            break
+        time.sleep(1 + 2 * attempt)
+    else:
+        shutil.rmtree(mount, ignore_errors=True)
+        raise RuntimeError(f"couldn't open the download ({(r.stderr or r.stdout).strip()})")
     try:
         src = os.path.join(mount, "GravelMaps.app")
         if not os.path.isdir(src):
