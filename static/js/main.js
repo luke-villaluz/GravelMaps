@@ -2,7 +2,9 @@
 
 import { $, setStatus, store } from "./util.js";
 import { state, syncLegs } from "./state.js";
-import { initMap, map, setBasemap } from "./map.js";
+import { initMap, map, refreshBasemap, setBasemap } from "./map.js";
+import { initNet } from "./online.js";
+import { initUpdate } from "./update.js";
 import { initStops, renderMarkers, renderStops } from "./stops.js";
 import { initStyle, renderProfiles, renderStyle } from "./style.js";
 import { initPois } from "./pois.js";
@@ -17,6 +19,7 @@ function setTheme(theme, save = false) {
   document.documentElement.dataset.theme = theme;
   document.querySelector('meta[name="theme-color"]').content = theme === "dark" ? "#202124" : "#ffffff";
   if (save) store.set("ui.theme", theme);
+  if (state.info) refreshBasemap();
 }
 
 export function update({ fit = false } = {}) {
@@ -30,6 +33,7 @@ export function update({ fit = false } = {}) {
 }
 
 (async function init() {
+  initNet();
   initMap();
   initStyle();
   initStops();
@@ -58,4 +62,16 @@ export function update({ fit = false } = {}) {
   const names = state.info.regions.map((r) => r.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));
   $("regions").textContent = `Map data © OpenStreetMap contributors · ${names.join(", ")}`;
   update({ fit: state.stops.some(Boolean) });
+  showPendingSetup();
+  initUpdate();
 })();
+
+// After an upgrade (or a setup cut short) some data may still be missing, like the offline map.
+async function showPendingSetup() {
+  try {
+    const { pending } = await (await fetch("/api/setup/status")).json();
+    if (!pending.length) return;
+    $("setup-note").innerHTML = `Not downloaded yet: ${pending.join(", ").toLowerCase()}. You need it to use GravelMaps offline. <b>Download it</b>`;
+    $("setup-note").hidden = false;
+  } catch { /* the note is optional */ }
+}

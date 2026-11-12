@@ -4,7 +4,7 @@ import { $, store } from "./util.js";
 import { GAS_ICON, POI_ICONS } from "./icons.js";
 import { map } from "./map.js";
 import { isOn, MARKER_GROUPS, POI_LABELS, setKinds } from "./pois.js";
-import { LAND_KEY, OVERLAYS, overlaysOn, setOverlay } from "./overlays.js";
+import { LAND_KEY, OVERLAYS, overlayBlocked, overlaysOn, setOverlay } from "./overlays.js";
 import { campKeyHtml } from "./camping.js";
 import { mvumKeyHtml } from "./mvum.js";
 
@@ -30,9 +30,10 @@ export function renderMarkerPanel() {
     </div>
     <div class="card ov-card${overlaysOpen ? "" : " closed"}">
       ${head("overlays-open", "Map Overlays", overlaysOpen)}
-      <div class="panel-body">${OVERLAYS.map((o) => `<button class="item${overlaysOn.has(o.key) ? "" : " off"}" data-overlay="${o.key}" aria-pressed="${overlaysOn.has(o.key)}">
-        <span class="ov-swatch ov-${o.swatch}"></span>${o.label}</button>
-        ${overlaysOn.has(o.key) && o.note ? `<p class="ov-note">${o.note}${o.minZoom && z < o.minZoom ? " <b>Zoom in to see it.</b>" : ""}</p>` : ""}
+      <div class="panel-body">${OVERLAYS.map((o) => `<button class="item${overlaysOn.has(o.key) ? "" : " off"}${overlayBlocked(o) ? " no-net" : ""}" data-overlay="${o.key}" aria-pressed="${overlaysOn.has(o.key)}"${overlayBlocked(o) ? ' title="Needs internet"' : ""}>
+        <span class="ov-swatch ov-${o.swatch}"></span>${o.label}${overlayBlocked(o) ? '<small class="no-net-tag">needs internet</small>' : ""}</button>
+        ${overlaysOn.has(o.key) && overlayBlocked(o) ? '<p class="ov-note">Comes back when you\'re online again.</p>'
+          : overlaysOn.has(o.key) && o.note ? `<p class="ov-note">${o.note}${o.minZoom && z < o.minZoom ? " <b>Zoom in to see it.</b>" : ""}</p>` : ""}
         ${overlaysOn.has(o.key) && o.key === "mvum" ? mvumKeyHtml() : ""}
         ${overlaysOn.has(o.key) && o.key === "camping" ? campKeyHtml() : ""}
         ${overlaysOn.has(o.key) && o.key === "land" ? `<div class="land-key">${LAND_KEY.map(([l, c]) => `<span><i style="background:${c}"></i>${l}</span>`).join("")}</div>` : ""}`).join("")}</div>

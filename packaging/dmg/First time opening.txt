@@ -1,0 +1,20 @@
+Installing GravelMaps
+=====================
+
+1. Drag GravelMaps onto the Applications folder in this window.
+2. Open GravelMaps from Applications (or Launchpad).
+
+The first time you open it, macOS says it "cannot verify" GravelMaps and won't open it.
+That's because GravelMaps is a free app that isn't registered with Apple. To open it:
+
+  1. Click "Done" on that message.
+  2. Open System Settings, then Privacy & Security.
+  3. Scroll down to the message about GravelMaps and click "Open Anyway".
+  4. Click "Open Anyway" again, and enter your Mac password if asked.
+
+You only do this once. After that it opens like any other app, and updates install themselves.
+
+To keep it in your Dock: while it's open, right-click its Dock icon, then Options, then Keep in Dock.
+
+On first launch, pick your states. GravelMaps downloads the maps once (about 1-2 GB per state,
+10-30 minutes), and from then on everything works without internet.

@@ -35,6 +35,8 @@ function renderElevation(p) {
   $("el-loss").textContent = `↘ ${ft(p.loss_m)}`;
   $("el-max").textContent = ft(p.max_m);
   $("el-grade").textContent = `${Math.round(p.max_grade * 100)}%`;
+  $("elev").title = p.coarse ? "Approximate: drawn from coarser terrain data, since detailed data needs internet." : "";
+  $("elev").classList.toggle("coarse", Boolean(p.coarse));
 
   const svg = $("el-svg");
   const W = svg.clientWidth || 300, H = 96, pad = 4;

@@ -1,24 +1,30 @@
-"""FastAPI app: routing API, geocoding proxy and the static web UI."""
-import re
+"""FastAPI app: routing API, geocoding proxy and the static web UI, plus the setup screen
+that downloads and builds map data from inside the app (Shell)."""
+import os
+import threading
 import time
 
 import requests
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import USER_AGENT
+from . import USER_AGENT, basemap, coords, pipeline
 from .camping import CampingIndex
+from .config import load_config, save_config
 from .elevation import Elevation
 from .graph import Graph
-from .paths import STATIC
+from .paths import STATIC, graph_dir
 from .profiles import DEFAULT_PRESET, KIND_LABELS, KINDS, PRESETS, PROFILES
+from .regions import CODES, STATES, parse_list
 from .router import RouteError, Router
+from .setupjob import SetupJob
 from .tiles import RoadTiles
+from .updater import updater
 
 PHOTON = "https://photon.komoot.io/api/"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
-LATLON = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$")
 
 
 # Size limits keep one request from tying up the server: far beyond any real trip, still bounded.
@@ -43,6 +49,8 @@ def create_app(regions):
     elevation = Elevation()
     road_tiles = RoadTiles(g, router.weights.kind)
     camping = CampingIndex()
+    # The offline street map; without it the UI keeps to the online basemaps.
+    base_tiles = basemap.LocalBasemap(basemap.path_for(regions)) if basemap.is_built(regions) else None
     tile_version = str(int(time.time()))  # busts browser caches when the server (or tile style) changes
     app = FastAPI(title="GravelMaps")
     http = requests.Session()
@@ -61,6 +69,7 @@ def create_app(regions):
             "default_preset": DEFAULT_PRESET,
             "tile_version": tile_version,
             "camping": {"ready": camping.ready, "built": camping.built},
+            "basemap": base_tiles is not None,
         }
 
     @app.post("/api/route")
@@ -97,6 +106,16 @@ def create_app(regions):
         return Response(road_tiles.tile(layer, z, x, y, theme), media_type="image/png",
                         headers={"Cache-Control": "public, max-age=86400"})
 
+    @app.get("/api/basemap/{z}/{x}/{y}.mvt")
+    def basemap_tile(z: int, x: int, y: int):
+        data = base_tiles.get(z, x, y) if base_tiles else None
+        if data is None:  # outside the downloaded area: an empty tile, nothing drawn
+            return Response(status_code=204)
+        headers = {"Cache-Control": "public, max-age=86400"}
+        if base_tiles.gzipped:
+            headers["Content-Encoding"] = "gzip"  # the browser unpacks it
+        return Response(data, media_type="application/x-protobuf", headers=headers)
+
     @app.post("/api/elevation")
     def elevation_profile(req: ElevationRequest):
         try:
@@ -109,9 +128,9 @@ def create_app(regions):
     @app.get("/api/geocode")
     def geocode(q: str, lat: float | None = None, lon: float | None = None, remote: bool = True):
         """Offline OSM places first; online geocoders fill in addresses and anything else."""
-        m = LATLON.match(q)
-        if m:
-            la, lo = float(m.group(1)), float(m.group(2))
+        ll = coords.parse(q)  # typed coordinates, e.g. from a GPS unit
+        if ll:
+            la, lo = ll
             return [{"name": f"{la:.5f}, {lo:.5f}", "detail": "Coordinates", "lat": la, "lon": lo}]
         local = g.places.search(q, lat, lon)
         if not remote or len(local) >= 3:
@@ -176,3 +195,116 @@ def create_app(regions):
 
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
     return app
+
+
+class SetupRequest(BaseModel):
+    states: list[str] = Field(min_length=1, max_length=60)  # two-letter codes, e.g. ["ca", "nv"]
+    update_data: bool = False
+    rebuild: bool = False
+
+
+def graph_ready(regions):
+    return bool(regions) and os.path.exists(os.path.join(graph_dir(regions), "meta.json"))
+
+
+class Shell:
+    """The whole web app, as served. Until a graph is built it shows the setup screen; then the
+    map. Setup's API is always there, so the map's settings can change states or update data, and
+    the old map keeps working until the new one is ready."""
+
+    def __init__(self, regions=None):
+        self.map_app = None
+        self.regions = None
+        self.job = None
+        self.lock = threading.Lock()
+        if graph_ready(regions):
+            self.load(regions)
+        self.setup_app = self._setup_app()
+
+    def load(self, regions):
+        app = create_app(regions)
+        self.map_app, self.regions = app, regions
+
+    def _finished(self, regions):
+        cfg = load_config()
+        cfg["regions"] = regions
+        save_config(cfg)
+        self.load(regions)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                msg = await receive()
+                if msg["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                elif msg["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+        path = scope.get("path", "")
+        app = self.setup_app if self.map_app is None or path.startswith("/api/setup") else self.map_app
+        await app(scope, receive, send)
+
+    def _setup_app(self):
+        app = FastAPI(title="GravelMaps setup")
+        shell = self
+
+        @app.get("/api/setup/states")
+        def states():
+            names = {c: n.replace("-", " ").title().replace(" Of ", " of ") for c, n in STATES.items()}
+            return sorted(({"code": c, "name": n} for c, n in names.items()), key=lambda s: s["name"])
+
+        @app.get("/api/setup/status")
+        def status():
+            regions = shell.job.regions if shell.job else (shell.regions or load_config().get("regions") or [])
+            busy = shell.job is not None and shell.job.running
+            return {
+                "ready": shell.map_app is not None,
+                "regions": regions,
+                "codes": [CODES[r] for r in regions],
+                "job": shell.job.status() if shell.job else None,
+                # Steps still to do for the current states, e.g. the offline map after an upgrade.
+                "pending": [t for _, t in pipeline.steps(shell.regions)] if shell.regions and not busy else [],
+            }
+
+        @app.post("/api/setup")
+        def start(req: SetupRequest):
+            try:
+                regions = parse_list(" ".join(req.states))
+            except ValueError as e:
+                raise HTTPException(400, str(e)) from e
+            with shell.lock:
+                if shell.job and shell.job.running:
+                    raise HTTPException(409, "Setup is already running.")
+                shell.job = SetupJob(regions, req.update_data, req.rebuild, on_done=shell._finished).start()
+            return shell.job.status()
+
+        # ---- app updates (the packaged Mac app only; see updater.py) ----
+        @app.get("/api/setup/update")
+        def update_check(force: bool = False):
+            return updater.check(force)
+
+        @app.post("/api/setup/update")
+        def update_start():
+            try:
+                updater.start()
+            except ValueError as e:
+                raise HTTPException(409, str(e)) from e
+            return updater.status()
+
+        @app.get("/api/setup/update/status")
+        def update_status():
+            return updater.status()
+
+        @app.get("/")
+        def setup_page():
+            return FileResponse(os.path.join(STATIC, "setup.html"), headers={"Cache-Control": "no-cache"})
+
+        @app.middleware("http")
+        async def revalidate_ui(request, call_next):
+            response = await call_next(request)
+            if not request.url.path.startswith("/api/"):
+                response.headers["Cache-Control"] = "no-cache"
+            return response
+
+        app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
+        return app

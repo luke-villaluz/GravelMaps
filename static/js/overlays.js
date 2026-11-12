@@ -4,6 +4,7 @@ import { store } from "./util.js";
 import { map } from "./map.js";
 import { CampingLayer } from "./camping.js";
 import { renderMarkerPanel } from "./markerPanel.js";
+import { net, onNetChange } from "./online.js";
 
 // An ArcGIS MapServer drawn on request: each image twice the tile's size, crisp on retina screens.
 // The server draws at its 96 dpi unless told otherwise, so at double size its labels come out half
@@ -26,15 +27,15 @@ export const LAND_KEY = [["BLM", "#fee679"], ["Forest Service", "#ccebc5"], ["Na
   ["Fish & Wildlife", "#7fcca7"], ["Military", "#fbb4ce"], ["Tribal", "#fdb46c"], ["Reclamation", "#ffffb3"],
   ["Other federal", "#e4c49f"], ["Local", "#8fb5be"]];
 export const OVERLAYS = [
-  { key: "land", label: "Public land", swatch: "land",
+  { key: "land", label: "Public land", swatch: "land", needsNet: true,
     note: "Who manages the land. BLM land is usually open to dispersed camping; private land is left clear.",
     make: () => L.tileLayer(`${BLM_SMA}/tile/{z}/{y}/{x}`, { pane: "land", opacity: 0.55, maxNativeZoom: 14, maxZoom: 19, attribution: "Land status: BLM" }) },
-  { key: "wilderness", label: "Wilderness areas", swatch: "wilderness",
+  { key: "wilderness", label: "Wilderness areas", swatch: "wilderness", needsNet: true,
     note: "No motor vehicles or bikes inside wilderness boundaries.",
     make: () => new ArcGISLayer(`${FS_EDW}/EDW_Wilderness_01/MapServer`, { layers: "show:0", pane: "land", opacity: 0.6, maxZoom: 19, attribution: "Wilderness: USDA Forest Service" }) },
-  { key: "forests", label: "Forest boundaries", swatch: "forests",
+  { key: "forests", label: "Forest boundaries", swatch: "forests", needsNet: true,
     make: () => new ArcGISLayer(`${FS_EDW}/EDW_ForestSystemBoundaries_01/MapServer`, { layers: "show:0,1", pane: "lines", maxZoom: 19, attribution: "Forest boundaries: USDA Forest Service" }) },
-  { key: "mvum", label: "MVUM roads & trails", swatch: "mvum", minZoom: 10,
+  { key: "mvum", label: "MVUM roads & trails", swatch: "mvum", minZoom: 10, needsNet: true,
     note: "Forest Service motor vehicle use maps, from zoom 10. The numbers are Forest Service road and trail numbers; click one for the vehicles allowed and dates open. Not every forest publishes this data.",
     // Big tiles: labels are cut at tile edges, so fewer edges means fewer cut-off road numbers.
     make: () => new ArcGISLayer(`${FS_EDW}/EDW_MVUM_01/MapServer`, { layers: "show:1,2", pane: "lines", tileSize: 512, dpi: 240, minZoom: 10, maxZoom: 19, attribution: "MVUM: USDA Forest Service" }) },
@@ -56,13 +57,17 @@ export function setOverlay(key, on) {
 }
 function syncOverlays() {
   for (const o of OVERLAYS) {
-    const on = overlaysOn.has(o.key);
+    // Agency overlays stay switched on while offline, but only draw once the internet is back.
+    const on = overlaysOn.has(o.key) && !overlayBlocked(o);
     if (on && !overlayLayers[o.key]) overlayLayers[o.key] = o.make().addTo(map);
     if (!on && overlayLayers[o.key]) { overlayLayers[o.key].remove(); delete overlayLayers[o.key]; }
   }
 }
 
+export const overlayBlocked = (o) => Boolean(o.needsNet) && !net.online;
+
 export function initOverlays() {
   syncOverlays();
+  onNetChange(() => { syncOverlays(); renderMarkerPanel(); });
   map.on("zoomend", () => { if (OVERLAYS.some((o) => o.minZoom && overlaysOn.has(o.key))) renderMarkerPanel(); }); // overlays' "zoom in" notes
 }

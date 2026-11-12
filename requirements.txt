@@ -9,3 +9,6 @@ requests>=2.31
 pillow>=10
 pymupdf>=1.24
 scipy>=1.11
+pmtiles>=3.8
+# The Mac app window (WebKit). Not needed for the terminal / browser version.
+pywebview>=6.2; sys_platform == "darwin"

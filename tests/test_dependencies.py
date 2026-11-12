@@ -21,6 +21,11 @@ def third_party_imports():
     return sorted(n for n in names if n.split(".")[0] not in sys.stdlib_module_names and n.split(".")[0] != "gravelmaps")
 
 
+MAC_ONLY = {"webview", "AppKit", "PyObjCTools"}  # the Mac app window (pywebview, PyObjC): macOS only
+
+
 @pytest.mark.parametrize("module", third_party_imports())
 def test_dependency_installed(module):
+    if module.split(".")[0] in MAC_ONLY and sys.platform != "darwin":
+        pytest.skip("Mac only")
     importlib.import_module(module)
