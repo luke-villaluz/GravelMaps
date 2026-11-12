@@ -20,6 +20,8 @@ export function renderMarkerPanel() {
   // The switch checks or unchecks every type: turn all off, then pick just the ones you want.
   const anyOn = MARKER_GROUPS.some((g) => g.kinds.some(isOn));
   const z = map.getZoom();
+  // Rebuilding the cards would jump them back to the top; keep where each one was scrolled to.
+  const scrolled = [...box.querySelectorAll(".card")].map((c) => c.scrollTop);
   box.innerHTML = `<div class="card poi-card${markersOpen ? "" : " closed"}">
       ${head("markers-open", "Map Markers", markersOpen,
         `<button class="switch${anyOn ? " on" : ""}" role="switch" aria-checked="${anyOn}" title="${anyOn ? "Uncheck" : "Check"} all markers"><i></i></button>`)}
@@ -38,6 +40,7 @@ export function renderMarkerPanel() {
         ${overlaysOn.has(o.key) && o.key === "camping" ? campKeyHtml() : ""}
         ${overlaysOn.has(o.key) && o.key === "land" ? `<div class="land-key">${LAND_KEY.map(([l, c]) => `<span><i style="background:${c}"></i>${l}</span>`).join("")}</div>` : ""}`).join("")}</div>
     </div>`;
+  box.querySelectorAll(".card").forEach((c, i) => { c.scrollTop = scrolled[i] || 0; });
   box.querySelector(".switch").addEventListener("click", () => setKinds(MARKER_GROUPS.flatMap((g) => g.kinds), !anyOn));
   box.querySelectorAll("[data-toggle]").forEach((b) => b.addEventListener("click", () => {
     store.set(b.dataset.toggle, isOpen(b.dataset.toggle) ? "0" : "1");

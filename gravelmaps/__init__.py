@@ -1,7 +1,7 @@
 """GravelMaps: a route planner that favors dirt, gravel and unpaved roads."""
 
 # The app's version. A release is cut by tagging the same version, e.g. v0.2.0 (see RELEASING.md).
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 REPO = "luke-villaluz/GravelMaps"
 
