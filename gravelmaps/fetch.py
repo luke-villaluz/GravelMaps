@@ -31,8 +31,10 @@ def _md5(path):
     return h.hexdigest()
 
 
-def fetch(region, force=False):
-    """Download the extract for `region` unless it is already complete. Returns the file path."""
+def fetch(region, force=False, progress=None):
+    """Download the extract for `region` unless it is already complete. Returns the file path.
+
+    progress(done_bytes, total_bytes) replaces the terminal progress line when given."""
     dest = pbf_path(region)
     url = url_for(region)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -43,7 +45,7 @@ def fetch(region, force=False):
 
     for attempt in range(1, ATTEMPTS + 1):
         try:
-            _download(region, url, part)
+            _download(region, url, part, progress)
             break
         except (requests.ConnectionError, requests.Timeout, requests.exceptions.ChunkedEncodingError) as e:
             if attempt == ATTEMPTS:
@@ -61,7 +63,7 @@ def fetch(region, force=False):
     return dest
 
 
-def _download(region, url, part):
+def _download(region, url, part, progress=None):
     done = os.path.getsize(part) if os.path.exists(part) else 0
     headers = {"User-Agent": USER_AGENT, **({"Range": f"bytes={done}-"} if done else {})}
     with requests.get(url, stream=True, headers=headers, timeout=60) as r:
@@ -75,5 +77,9 @@ def _download(region, url, part):
             for chunk in r.iter_content(CHUNK):
                 f.write(chunk)
                 done += len(chunk)
-                _progress(region, done, total)
-        print()
+                if progress:
+                    progress(done, total)
+                else:
+                    _progress(region, done, total)
+        if not progress:
+            print()

@@ -1,0 +1,61 @@
+# Builds the Mac app and publishes it as a GitHub Release when a version tag is pushed:
+#   git tag v0.3.0 && git push origin v0.3.0        (see RELEASING.md)
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: macos-latest      # Apple Silicon
+            arch: arm64
+          - os: macos-15-intel    # Intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Check the tag matches the app's version
+        run: |
+          v=$(python -c "import re;print(re.search(r'__version__ = \"(.+)\"', open('gravelmaps/__init__.py').read()).group(1))")
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME but gravelmaps/__init__.py says $v"; exit 1; }
+      - run: pip install -r requirements-build.txt -r requirements-dev.txt
+      - run: pytest -q
+      - run: brew install create-dmg
+      - run: packaging/build_app.sh --dmg
+      - name: Smoke test the built app
+        run: GRAVELMAPS_DATA="$RUNNER_TEMP/data" dist/GravelMaps.app/Contents/MacOS/GravelMaps desktop --self-test
+      - uses: actions/upload-artifact@v5
+        with:
+          name: dmg-${{ matrix.arch }}
+          path: dist/GravelMaps-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.dmg --title "GravelMaps ${GITHUB_REF_NAME#v}" \
+            --notes-file packaging/release-notes.md --generate-notes

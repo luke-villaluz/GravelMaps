@@ -91,3 +91,107 @@ def test_serves_the_app(client):
     res = client.get("/")
     assert res.status_code == 200 and "GravelMaps" in res.text
     assert res.headers["cache-control"] == "no-cache"
+
+
+
+# ---- the offline basemap endpoint --------------------------------------------------------------
+
+@pytest.fixture
+def basemap_client(data_dir, monkeypatch, tmp_path):
+    from test_basemap import make_planet
+
+    from gravelmaps import basemap
+    data, tiles = make_planet(max_zoom=12)
+    path = tmp_path / "base.pmtiles"
+    path.write_bytes(data)
+    monkeypatch.setattr(basemap, "is_built", lambda regions: True)
+    monkeypatch.setattr(basemap, "path_for", lambda regions: str(path))
+    write_ways(data_dir / "a.npz", grid_ways())
+    G.build(["a"])
+    monkeypatch.setattr(server, "CampingIndex", lambda: camping.CampingIndex(path=str(tmp_path / "none.json")))
+    return TestClient(server.create_app(["a"])), tiles
+
+
+def test_basemap_tiles(basemap_client):
+    from pmtiles.tile import tileid_to_zxy
+    client, tiles = basemap_client
+    assert client.get("/api/region").json()["basemap"] is True
+    t, data = next((t, d) for t, d in tiles.items() if tileid_to_zxy(t)[0] == 12)
+    z, x, y = tileid_to_zxy(t)
+    r = client.get(f"/api/basemap/{z}/{x}/{y}.mvt")
+    assert r.status_code == 200 and r.headers["content-encoding"] == "gzip"
+    assert r.content == data  # the test client unpacks the gzip, as a browser does
+    assert client.get("/api/basemap/12/0/0.mvt").status_code == 204   # outside the download
+    assert client.get("/api/basemap/16/0/0.mvt").status_code == 204   # deeper than the data
+
+
+def test_no_basemap(client):
+    assert client.get("/api/region").json()["basemap"] is False
+    assert client.get("/api/basemap/5/5/5.mvt").status_code == 204
+
+
+# ---- the shell: setup screen until there is a map ----------------------------------------------
+
+@pytest.fixture
+def no_config(monkeypatch, tmp_path):
+    saved = {}
+    monkeypatch.setattr(server, "load_config", lambda: dict(saved))
+    monkeypatch.setattr(server, "save_config", lambda cfg: saved.update(cfg))
+    return saved
+
+
+def test_setup_screen_without_data(no_config):
+    client = TestClient(server.Shell(None))
+    page = client.get("/")
+    assert page.status_code == 200 and "GravelMaps Setup" in page.text
+    status = client.get("/api/setup/status").json()
+    assert status["ready"] is False and status["job"] is None and status["regions"] == []
+    assert client.get("/api/region").status_code == 404
+    names = [s["name"] for s in client.get("/api/setup/states").json()]
+    assert "California" in names and names == sorted(names)
+    assert client.post("/api/setup", json={"states": ["zz"]}).status_code == 400
+
+
+def test_setup_job_loads_the_map(no_config, monkeypatch, data_dir, tmp_path):
+    from gravelmaps import pipeline
+    write_ways(data_dir / "a.npz", grid_ways())
+    monkeypatch.setattr(server, "CampingIndex", lambda: camping.CampingIndex(path=str(tmp_path / "none.json")))
+    monkeypatch.setattr(pipeline, "steps", lambda regions, *a: [("graph", "Building the routing graph")])
+    monkeypatch.setattr(pipeline, "run", lambda regions, update_data, rebuild, report: (
+        report.step("graph", "Building"), report.progress(5, 10), G.build(["a"])))
+    monkeypatch.setattr(server, "graph_ready", lambda regions: False)
+    monkeypatch.setattr(server, "parse_list", lambda text: ["a"])
+    monkeypatch.setattr(server, "CODES", {"a": "aa"})
+
+    shell = server.Shell(None)
+    client = TestClient(shell)
+    started = client.post("/api/setup", json={"states": ["aa"]}).json()
+    assert started["steps"][0]["key"] == "graph"
+    shell.job.thread.join(10)
+    status = client.get("/api/setup/status").json()
+    assert status["ready"] is True and status["job"]["finished"] and status["job"]["error"] is None
+    assert status["job"]["steps"][0]["state"] == "done"
+    assert no_config["regions"] == ["a"]
+    assert client.get("/api/region").json()["regions"] == ["a"]   # now the map is served
+    assert "GravelMaps Setup" not in client.get("/").text
+
+
+def test_setup_job_reports_errors(no_config, monkeypatch):
+    import requests
+
+    from gravelmaps import pipeline
+    monkeypatch.setattr(pipeline, "steps", lambda regions, *a: [("fetch:nevada", "Downloading")])
+
+    def offline(regions, update_data, rebuild, report):
+        report.step("fetch:nevada", "Downloading")
+        raise requests.ConnectionError("no route to host")
+
+    monkeypatch.setattr(pipeline, "run", offline)
+    shell = server.Shell(None)
+    client = TestClient(shell)
+    client.post("/api/setup", json={"states": ["nv"]})
+    shell.job.thread.join(10)
+    job = client.get("/api/setup/status").json()["job"]
+    assert job["steps"][0]["state"] == "failed" and "internet" in job["error"]
+    assert client.get("/api/setup/status").json()["ready"] is False
+    assert "regions" not in no_config

@@ -93,7 +93,15 @@ class Elevation:
         lon = np.interp(d, cum, c[:, 0])
         # Coarser tiles for long routes keep the number of downloads reasonable.
         z = 12 if total < 150_000 else 11 if total < 600_000 else 10
-        e = self.sample(lat, lon, z)
+        # Offline, fall back to coarser tiles already on disk; setup caches zoom HIGH_ZOOM for
+        # every road in the chosen states, so there's always something to draw.
+        for zoom in range(z, HIGH_ZOOM - 1, -1):
+            try:
+                e = self.sample(lat, lon, zoom)
+                break
+            except requests.RequestException:
+                if zoom == HIGH_ZOOM:
+                    raise
         if len(e) >= 5:  # light smoothing: roads don't follow every DEM pixel
             e = np.convolve(np.pad(e, 2, mode="edge"), np.ones(5) / 5, mode="valid")
 
@@ -118,6 +126,7 @@ class Elevation:
             "max_m": round(float(e.max()), 1),
             "min_m": round(float(e.min()), 1),
             "max_grade": round(float(grade.max()), 4),
+            "coarse": zoom < z,  # drawn from lower-resolution terrain (offline)
         }
 
 

@@ -5,9 +5,9 @@
   python -m gravelmaps setup    # choose regions, download, build
   python -m gravelmaps serve    # start the web server only
   python -m gravelmaps camping  # re-read the Forest Service MVUMs for dispersed camping
+  python -m gravelmaps desktop  # the Mac app: its own window, setup screen included
 """
 import argparse
-import json
 import os
 import signal
 import socket
@@ -17,24 +17,9 @@ import threading
 import time
 import webbrowser
 
-import requests
-
-from . import build, fetch, graph
-from .paths import CONFIG, DATA, pbf_path
+from . import pipeline
+from .config import load_config, save_config
 from .regions import HOW_TO, codes, parse_list
-
-
-def load_config():
-    if os.path.exists(CONFIG):
-        with open(CONFIG) as f:
-            return json.load(f)
-    return {}
-
-
-def save_config(cfg):
-    os.makedirs(DATA, exist_ok=True)
-    with open(CONFIG, "w") as f:
-        json.dump(cfg, f, indent=2)
 
 
 def ask_regions():
@@ -64,49 +49,7 @@ def setup(args):
             sys.exit("No states chosen yet; run again with --regions, e.g. --regions ca nv")
         cfg["regions"] = ask_regions()
     save_config(cfg)
-    regions = cfg["regions"]
-
-    for r in regions:
-        if args.update_data or not os.path.exists(pbf_path(r)):
-            print(f"Downloading {r} ...")
-            fetch.fetch(r, force=args.update_data)
-
-    for r in regions:
-        if args.rebuild or not build.is_fresh(r):
-            print(f"Parsing {r} (one-time) ...")
-            build.parse(r)
-
-    if args.rebuild or not graph.is_fresh(regions):
-        print("Building routing graph ...")
-        graph.build(regions)
-
-    # Terrain for the High Elevation slider. Optional: without it that slider is just hidden.
-    from . import elevation
-    if not os.path.exists(elevation.heights_path(regions)):
-        print("Scoring road elevations (one-time download of terrain tiles) ...")
-        try:
-            elevation.build_edge_heights(regions)
-        except requests.RequestException as e:
-            print(f"  skipped, couldn't download terrain ({e}); the High Elevation slider stays off.")
-        except Exception as e:  # optional: never let it stop GravelMaps from starting
-            print(f"  skipped ({type(e).__name__}: {e}); the High Elevation slider stays off.")
-
-    # Dispersed camping rules from the forests' MVUM PDFs. Optional: without it that overlay is hidden.
-    from . import camping
-    if not camping.is_built():
-        build_camping(regions, refresh=False)
-    return regions
-
-
-def build_camping(regions, refresh):
-    from . import camping
-    print("Reading Forest Service motor vehicle use maps for dispersed camping (one-time, a few minutes) ...")
-    try:
-        camping.build(regions, refresh=refresh)
-    except requests.RequestException as e:
-        print(f"  skipped, couldn't reach the Forest Service ({e}); the camping overlay stays off.")
-    except Exception as e:  # optional: never let it stop GravelMaps from starting
-        print(f"  skipped ({type(e).__name__}: {e}); the camping overlay stays off.")
+    return pipeline.run(cfg["regions"], update_data=args.update_data, rebuild=args.rebuild)
 
 
 def open_browser(url):
@@ -162,12 +105,10 @@ def alive(pid):
 def serve(args, regions=None):
     import uvicorn
 
-    from .server import create_app
+    from .server import Shell
 
-    regions = regions or load_config().get("regions")
-    if not regions:
-        sys.exit("No regions configured yet; run `GravelMaps` first.")
-    app = create_app(regions)
+    # With no map data yet, the page opens on the setup screen instead.
+    app = Shell(regions or load_config().get("regions"))
     free_port(args.port)
     url = f"http://localhost:{args.port}"
     print(f"\nGravelMaps is running at {url}")
@@ -225,7 +166,7 @@ def main():
             return
 
     ap = argparse.ArgumentParser(prog="gravelmaps")
-    ap.add_argument("command", nargs="?", default="run", choices=["run", "setup", "serve", "camping"])
+    ap.add_argument("command", nargs="?", default="run", choices=["run", "setup", "serve", "camping", "desktop"])
     ap.add_argument("--regions", nargs="+", metavar="CODE", help="state codes, e.g. ca nv (saved for next time)")
     ap.add_argument("--rebuild", action="store_true", help="re-parse and rebuild the graph")
     ap.add_argument("--update-data", action="store_true", help="re-download fresh OSM data")
@@ -233,13 +174,17 @@ def main():
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--host", default="127.0.0.1", help="use 0.0.0.0 to reach it from your phone on the same Wi-Fi")
     ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--self-test", action="store_true", help="with `desktop`: start, answer one request, quit")
     args = ap.parse_args(argv)
 
-    if args.command == "camping":
+    if args.command == "desktop":
+        from . import desktop
+        desktop.main(self_test=args.self_test)
+    elif args.command == "camping":
         regions = load_config().get("regions")
         if not regions:
             sys.exit("No regions configured yet; run `GravelMaps` first.")
-        build_camping(regions, refresh=args.refresh)
+        pipeline.build_camping(regions, refresh=args.refresh)
     elif args.command in ("run", "setup"):
         regions = setup(args)
         if args.command == "run":

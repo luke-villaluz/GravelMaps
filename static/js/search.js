@@ -4,6 +4,7 @@ import { $, esc, setStatus } from "./util.js";
 import { state } from "./state.js";
 import { map } from "./map.js";
 import { update } from "./main.js";
+import { net } from "./online.js";
 
 let searchCtl = null;
 
@@ -11,7 +12,8 @@ async function geocode(q, remote = true) {
   searchCtl?.abort();
   searchCtl = new AbortController();
   const c = map.getCenter();
-  const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}&lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}&remote=${remote}`,
+  // Offline, only the downloaded OSM places are searched: no waiting on a geocoder that can't answer.
+  const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}&lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}&remote=${remote && net.online}`,
     { signal: searchCtl.signal });
   const body = await res.json();
   if (!res.ok) throw new Error(body.detail || res.statusText);

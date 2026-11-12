@@ -78,6 +78,29 @@ button { font: inherit; color: inherit; }
   background: transparent; color: var(--label-2); cursor: pointer;
 }
 #theme-toggle:hover { background: var(--hover); color: var(--label); }
+#settings {
+  width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--label-2);
+}
+#settings:hover { background: var(--hover); color: var(--label); }
+#setup-note {
+  display: block; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--blue-tint);
+  color: var(--label); text-decoration: none; font-size: 13px;
+}
+#setup-note[hidden] { display: none; }
+#setup-note b { color: var(--blue); }
+#update-note {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--blue-tint); font-size: 13px;
+}
+#update-note[hidden] { display: none; }
+#update-note .row { display: flex; gap: 14px; align-items: center; margin-top: 8px; }
+#update-note button {
+  border: 0; border-radius: 16px; padding: 6px 14px; background: var(--blue); color: var(--surface); font: inherit;
+  font-weight: 500; cursor: pointer;
+}
+#update-note button:disabled { opacity: 0.5; cursor: default; }
+#update-note a { color: var(--blue); }
+#update-note .sub { margin-top: 6px; color: var(--label-2); }
+#update-note .sub:empty { display: none; }
 #theme-toggle .moon, [data-theme="dark"] #theme-toggle .sun { display: block; }
 #theme-toggle .sun, [data-theme="dark"] #theme-toggle .moon { display: none; }
 .brand b { color: var(--label); font-weight: 500; }
@@ -290,6 +313,7 @@ input[type="range"]::-moz-range-thumb {
 #basemaps button:hover { background: var(--hover); }
 #basemaps button.on { background: var(--blue-tint); color: var(--blue-dark); }
 :root[data-theme="dark"] #basemaps button.on { background: #394457; }
+#basemaps button.no-net { opacity: 0.45; text-decoration: line-through; }
 .button-stack { display: flex; flex-direction: column; width: 40px; border-radius: 8px; overflow: hidden; }
 .button-stack + .button-stack { margin-top: 0; }
 .button-stack button {
@@ -530,6 +554,8 @@ input[type="range"]::-moz-range-thumb {
 #markers .ov-forests { border: 2px solid #3d7a3a; background: transparent; }
 #markers .ov-mvum { height: 4px; margin: 5px 0; background: repeating-linear-gradient(90deg, #8b5a2b 0 5px, transparent 5px 8px); }
 #markers .item.off .ov-swatch { filter: grayscale(1); opacity: 0.4; }
+#markers .item.no-net { opacity: 0.55; }
+#markers .no-net-tag { margin-left: auto; padding-left: 6px; font-size: 10px; white-space: nowrap; color: var(--label-3); }
 #markers .ov-note { margin: 0 8px 4px 34px; color: var(--label-2); font-size: 11.5px; line-height: 1.35; }
 #markers .land-key { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 6px; margin: 2px 6px 6px 12px; font-size: 11.5px; color: var(--label-2); }
 #markers .land-key span { display: flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -549,3 +575,5 @@ input[type="range"]::-moz-range-thumb {
 #markers .ov-note code { font-size: 11px; }
 .mvum-kind { --pin: #8b5a2b; }
 .gas-popup .sub { font-weight: 500; color: var(--label); }
+/* Elevation from coarse terrain (offline): say so. */
+#elev.coarse::after { content: "Approximate (offline terrain)"; display: block; font-size: 11px; color: var(--label-3); margin-top: 4px; }

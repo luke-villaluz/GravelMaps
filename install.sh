@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Installs the `GravelMaps` command. Either run it from a clone (./install.sh), or with no clone:
+# (./install.sh --app also makes a "GravelMaps (Dev)" app in ~/Applications that runs this clone.)
 #   curl -fsSL https://raw.githubusercontent.com/luke-villaluz/GravelMaps/main/install.sh | bash
 # which downloads the code to ~/GravelMaps. Re-running either one updates and keeps your map data.
 set -euo pipefail
@@ -48,6 +49,39 @@ download() {
   rm -rf "$tmp"
 }
 
+# A Dock app for working on GravelMaps: runs the code straight from this checkout, so a change
+# shows up the next time it's opened. Friends get the real app from GitHub Releases instead.
+make_dev_app() {
+  local repo="$1" py="$2" app="$HOME/Applications/GravelMaps (Dev).app"
+  rm -rf "$app"
+  mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+  cp "$repo/packaging/icon.icns" "$app/Contents/Resources/icon.icns"
+  cat > "$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleName</key><string>GravelMaps (Dev)</string>
+  <key>CFBundleIdentifier</key><string>io.github.luke-villaluz.gravelmaps.dev</string>
+  <key>CFBundleExecutable</key><string>GravelMaps</string>
+  <key>CFBundleIconFile</key><string>icon</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSArchitecturePriority</key><array><string>arm64</string><string>x86_64</string></array>
+</dict></plist>
+PLIST
+  # macOS may start a script app under Rosetta (Intel emulation); run Python natively on Apple Silicon.
+  cat > "$app/Contents/MacOS/GravelMaps" <<LAUNCH
+#!/bin/sh
+if [ "\$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then
+  exec arch -arm64 "$py" "$repo/run.py" desktop >> "$repo/data/dev-app.log" 2>&1
+fi
+exec "$py" "$repo/run.py" desktop >> "$repo/data/dev-app.log" 2>&1
+LAUNCH
+  chmod +x "$app/Contents/MacOS/GravelMaps"
+  mkdir -p "$repo/data"
+  echo "Made $app. Open it once from Finder, then right-click its Dock icon → Options → Keep in Dock."
+}
+
 main() {
   local src="${BASH_SOURCE[0]:-}" repo
   if [ -n "$src" ] && [ -f "$(dirname "$src")/run.py" ]; then
@@ -77,6 +111,10 @@ exec "$PY" "$repo/run.py" "\$@"
 EOF
   chmod +x "$CMD"
   echo "Installed $CMD"
+  if [ "${1:-}" = "--app" ] && [ "$(uname)" = Darwin ]; then
+    make_dev_app "$repo" "$PY"
+    return
+  fi
 
   local on_path=1
   case ":$PATH:" in
