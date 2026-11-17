@@ -102,7 +102,7 @@ GravelMaps camping --refresh       # re-read the MVUM PDFs
 ## Development
 
 Edit the code, then see it in the app: `install.sh --app` makes a **GravelMaps (Dev)** app in
-`~/Applications` that runs straight from this checkout (keep it in the Dock; reopen it to pick up
+`/Applications` that runs straight from this checkout (keep it in the Dock; reopen it to pick up
 changes). `python run.py desktop` does the same from the terminal. Releasing a new version for
 everyone else is a tag push; see [RELEASING.md](RELEASING.md).
 

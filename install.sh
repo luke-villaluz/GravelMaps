@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installs the `GravelMaps` command. Either run it from a clone (./install.sh), or with no clone:
-# (./install.sh --app also makes a "GravelMaps (Dev)" app in ~/Applications that runs this clone.)
+# (./install.sh --app also makes a "GravelMaps (Dev)" app in /Applications that runs this clone.)
 #   curl -fsSL https://raw.githubusercontent.com/luke-villaluz/GravelMaps/main/install.sh | bash
 # which downloads the code to ~/GravelMaps. Re-running either one updates and keeps your map data.
 set -euo pipefail
@@ -52,7 +52,7 @@ download() {
 # A Dock app for working on GravelMaps: runs the code straight from this checkout, so a change
 # shows up the next time it's opened. Friends get the real app from GitHub Releases instead.
 make_dev_app() {
-  local repo="$1" py="$2" app="$HOME/Applications/GravelMaps (Dev).app"
+  local repo="$1" py="$2" app="/Applications/GravelMaps (Dev).app"
   rm -rf "$app"
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
   cp "$repo/packaging/icon.icns" "$app/Contents/Resources/icon.icns"
