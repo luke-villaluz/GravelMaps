@@ -30,5 +30,3 @@ PYTHON=.venv/bin/python packaging/build_app.sh --dmg   # dist/GravelMaps.app and
 It's signed ad hoc (no Apple Developer account), so the first open needs System Settings →
 Privacy & Security → Open Anyway, like the downloaded one. `brew install create-dmg` gives the DMG
 its drag-to-Applications layout; without it the DMG is plain but works the same.
-
-`packaging/make_icon.py` redraws the icon.

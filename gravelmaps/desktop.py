@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:#202124;color:#9aa0a6;font:15px -apple
 display:grid;place-items:center} .b{text-align:center} .e{font-size:44px;margin-bottom:10px}
 .s{display:inline-block;width:14px;height:14px;border:2px solid #8ab4f8;border-right-color:transparent;border-radius:50%;
 animation:r .9s linear infinite;vertical-align:-2px;margin-right:8px} @keyframes r{to{transform:rotate(360deg)}}
-</style></head><body><div class="b"><div class="e">🚙</div><span class="s"></span>Starting GravelMaps…</div></body></html>"""
+</style></head><body><div class="b"><div class="e">🗺️</div><span class="s"></span>Starting GravelMaps…</div></body></html>"""
 
 
 def _port_free(port):
