@@ -24,7 +24,7 @@ export const state = {
 };
 
 export const stopRole = (i) => (i === 0 ? "start" : i === state.stops.length - 1 ? "end" : "via");
-export const stopLetter = (i) => (i === 0 ? "A" : i === state.stops.length - 1 ? "B" : String(i));
+export const stopLetter = (i) => (i === 0 ? "S" : i === state.stops.length - 1 ? "E" : String(i));
 
 // ---------- legs (per-leg route style) ----------
 export const kindKeys = () => state.info.kinds.map((k) => k.key);
