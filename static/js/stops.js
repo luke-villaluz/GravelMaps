@@ -128,10 +128,14 @@ export function insertVia(latlng, leg) {
 
 export function initStops() {
   $("add-via").addEventListener("click", () => {
-    insertStop(state.stops.length - 1, null);
+    // Append after the destination: the old destination becomes a stop and the new, empty row is
+    // the destination. The new leg copies the last leg's style and vehicle.
+    state.stops.push(null);
+    state.legs.push([...state.legs[state.legs.length - 1]]);
+    state.vehicles.push(state.vehicles[state.vehicles.length - 1]);
     state.activeLeg = state.legs.length - 1;
     update();
-    $("stops").querySelectorAll("input")[state.stops.length - 2].focus();
+    $("stops").querySelectorAll("input")[state.stops.length - 1].focus();
   });
   $("swap").addEventListener("click", () => {
     state.stops.reverse();
