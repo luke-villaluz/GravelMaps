@@ -118,6 +118,19 @@ def test_never_slider_excludes_kind(data_dir):
     assert {s["name"] for s in r.route(pts, legs=[no_rough])["steps"]} == {"Hwy"}
 
 
+def test_graded_avoids_rough_but_4x4_takes_it(data_dir):
+    ways = [
+        (1, [(1, 40.0, -118.0), (2, 40.0, -117.9)], {"highway": "track", "tracktype": "grade5", "name": "Rough"}),
+        (2, [(1, 40.0, -118.0), (3, 40.3, -117.95), (2, 40.0, -117.9)],
+         {"highway": "unclassified", "surface": "gravel", "name": "Graded"}),
+    ]
+    write_ways(data_dir / "a.npz", ways)
+    r = make_router(["a"])
+    pts = [(40.0, -118.0), (40.0, -117.9)]
+    assert {s["name"] for s in r.route(pts, legs=["graded"])["steps"]} == {"Graded"}
+    assert {s["name"] for s in r.route(pts, legs=["dirt"])["steps"]} == {"Rough"}
+
+
 def test_moto_only_trail(data_dir):
     ways = [
         (1, [(1, 40.0, -118.0), (2, 40.0, -117.9)], {"highway": "path", "motorcycle": "yes", "name": "Trail"}),

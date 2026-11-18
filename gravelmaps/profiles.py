@@ -47,7 +47,11 @@ PROFILES = {
 
 # Slider values in SLIDERS order. "vehicles" limits a preset to those profiles (default: all).
 PRESETS = {
-    "dirt":    {"label": "Only Dirt",       "values": [5, 20, 40, 85, 100, 100, 100, 50]},
+    # Dirt a regular or AWD car can drive: graded gravel and dirt roads, rough 4x4 tracks only
+    # when there's no other way through, never singletrack.
+    "graded":  {"label": "Only Dirt (Graded)", "values": [5, 20, 40, 85, 100, 10, 0, 50]},
+    # All dirt, and takes a rough 4x4 track when it saves real time or links up more dirt.
+    "dirt":    {"label": "Only Dirt (4x4)",    "values": [5, 20, 40, 85, 100, 100, 60, 50]},
     "mostly":  {"label": "Mostly Dirt",     "values": [17, 54, 73, 80, 85, 85, 90, 50]},
     "mixed":   {"label": "Mixed",           "values": [35, 55, 65, 65, 70, 50, 60, 50]},
     "paved":   {"label": "Paved Backroads", "values": [15, 50, 75, 35, 30, 0, 0, 50]},
